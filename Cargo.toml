@@ -2,7 +2,7 @@
 name = "detsys-ids-client"
 version = "0.1.0"
 edition = "2021"
-licenes = "Apache-2.0"
+license = "Apache-2.0"
 description = "A client for install.determinate.systems, in particular the feature flagging/configuration and event collection. The event collection data is explicitly PostHog compatible."
 
 [features]
