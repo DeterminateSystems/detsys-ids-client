@@ -109,6 +109,7 @@ impl Transport for Transports {
         match self {
             Self::None => Ok(crate::checkin::Checkin {
                 options: std::collections::HashMap::new(),
+                ..Default::default()
             }),
             Self::File(t) => Ok(t.checkin(session_properties).await?),
             Self::Http(t) => Ok(t.checkin(session_properties).await?),

@@ -8,7 +8,14 @@ pub(crate) type CoherentFeatureFlags = HashMap<String, Arc<Feature<serde_json::V
 
 #[derive(Clone, Debug, Deserialize, Default)]
 pub struct Checkin {
+    #[serde(default)]
+    pub(crate) server_options: ServerOptions,
     pub(crate) options: CoherentFeatureFlags,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+pub(crate) struct ServerOptions {
+    pub(crate) compression_algorithms: crate::compression_set::CompressionSet,
 }
 
 impl Checkin {
@@ -44,7 +51,6 @@ pub struct Feature<T: serde::de::DeserializeOwned> {
 
 #[cfg(test)]
 mod test {
-
     #[test]
     fn test_parse() {
         let json = r#"
