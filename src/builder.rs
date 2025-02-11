@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use reqwest::Certificate;
@@ -16,7 +17,7 @@ pub struct Builder {
     facts: Option<Map>,
     groups: Option<Map>,
     proxy: Option<Url>,
-    ssl_cert: Option<Certificate>,
+    ssl_cert_path: Option<PathBuf>,
     timeout: Option<Duration>,
 }
 
@@ -30,28 +31,28 @@ impl Builder {
             facts: None,
             groups: None,
             proxy: None,
-            ssl_cert: None,
+            ssl_cert_path: None,
             timeout: None,
         }
     }
 
-    pub fn set_distinct_id(mut self, distinct_id: impl Into<DistinctId>) -> Self {
-        self.distinct_id = Some(distinct_id.into());
+    pub fn set_distinct_id(mut self, distinct_id: Option<DistinctId>) -> Self {
+        self.distinct_id = distinct_id;
         self
     }
 
-    pub fn set_device_id(mut self, device_id: impl Into<DeviceId>) -> Self {
-        self.device_id = Some(device_id.into());
+    pub fn set_device_id(mut self, device_id: Option<DeviceId>) -> Self {
+        self.device_id = device_id;
         self
     }
 
-    pub fn set_facts(mut self, facts: Map) -> Self {
-        self.facts = Some(facts);
+    pub fn set_facts(mut self, facts: Option<Map>) -> Self {
+        self.facts = facts;
         self
     }
 
-    pub fn set_groups(mut self, groups: Map) -> Self {
-        self.groups = Some(groups);
+    pub fn set_groups(mut self, groups: Option<Map>) -> Self {
+        self.groups = groups;
         self
     }
 
@@ -66,8 +67,8 @@ impl Builder {
         self
     }
 
-    pub fn set_endpoint(mut self, endpoint: impl Into<String>) -> Self {
-        self.endpoint = Some(endpoint.into());
+    pub fn set_endpoint(mut self, endpoint: Option<String>) -> Self {
+        self.endpoint = endpoint;
         self
     }
 
@@ -87,7 +88,7 @@ impl Builder {
     /// let cli = Cli { no_telemetry: false, };
     ///
     /// let (recorder, worker) = builder!()
-    ///   .set_enable_reporting(!cli.no_telemetry)
+    ///   .set_enable_reporting(cli.no_telemetry)
     ///   .build()
     ///   .await
     ///   .unwrap();
@@ -98,22 +99,21 @@ impl Builder {
         self
     }
 
-    pub fn set_timeout(mut self, duration: impl Into<Duration>) -> Self {
-        self.timeout = Some(duration.into());
+    pub fn set_timeout(mut self, duration: Option<Duration>) -> Self {
+        self.timeout = duration;
         self
     }
 
-    #[tracing::instrument(skip(self))]
-    pub async fn try_set_ssl_cert_file(
-        &mut self,
-        ssl_cert_file: impl AsRef<std::path::Path> + std::fmt::Debug,
-    ) -> Result<&mut Self, TransportsError> {
-        self.ssl_cert = Some(read_cert_file(&ssl_cert_file).await?);
-        Ok(self)
+    /// Set the path to a certificate bundle.
+    ///
+    /// Note: certificate paths that are invalid or can't be parsed are ignored.
+    pub async fn set_ssl_cert_path(mut self, ssl_cert_path: Option<std::path::PathBuf>) -> Self {
+        self.ssl_cert_path = ssl_cert_path;
+        self
     }
 
-    pub fn set_proxy(mut self, proxy: Url) -> Self {
-        self.proxy = Some(proxy);
+    pub fn set_proxy(mut self, proxy: Option<Url>) -> Self {
+        self.proxy = proxy;
         self
     }
 
@@ -129,12 +129,23 @@ impl Builder {
         snapshotter: S,
     ) -> Result<(Recorder, Worker), TransportsError> {
         let transport = if self.enable_reporting {
+            let certs = if let Some(path) = self.ssl_cert_path.take() {
+                read_cert_file(&path)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::warn!(?path, %e, "Failed to parse the TLS certificates");
+                    })
+                    .ok()
+            } else {
+                None
+            };
+
             crate::transport::Transports::try_new(
                 self.endpoint.take(),
                 self.timeout
                     .take()
                     .unwrap_or_else(|| Duration::from_secs(3)),
-                self.ssl_cert.take(),
+                certs,
                 self.proxy.take(),
             )
             .await?
