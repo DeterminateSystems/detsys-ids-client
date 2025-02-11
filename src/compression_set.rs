@@ -4,14 +4,13 @@ use tokio::io::AsyncWriteExt;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CompressionSet {
     zstd: bool,
-    identity: bool,
 }
 
 impl CompressionSet {
     pub(crate) fn delete(&mut self, algo: &CompressionAlgorithm) {
         match algo {
             CompressionAlgorithm::Identity => {
-                self.identity = false;
+                // noop
             }
             CompressionAlgorithm::Zstd => {
                 self.zstd = false;
@@ -24,9 +23,8 @@ impl CompressionSet {
         if self.zstd {
             algos.push(CompressionAlgorithm::Zstd);
         }
-        if self.identity {
-            algos.push(CompressionAlgorithm::Identity);
-        }
+
+        algos.push(CompressionAlgorithm::Identity);
 
         algos.into_iter()
     }
@@ -34,10 +32,7 @@ impl CompressionSet {
 
 impl std::default::Default for CompressionSet {
     fn default() -> Self {
-        Self {
-            zstd: true,
-            identity: true,
-        }
+        Self { zstd: true }
     }
 }
 
@@ -60,16 +55,10 @@ impl<'de> Deserialize<'de> for CompressionSet {
             .collect();
 
         if algos.is_empty() {
-            return Ok(CompressionSet {
-                zstd: false,
-                identity: true,
-            });
+            return Ok(CompressionSet { zstd: false });
         }
 
-        let mut set = CompressionSet {
-            zstd: false,
-            identity: false,
-        };
+        let mut set = CompressionSet { zstd: false };
 
         for algo in algos.into_iter() {
             match algo {
@@ -77,7 +66,7 @@ impl<'de> Deserialize<'de> for CompressionSet {
                     set.zstd = true;
                 }
                 CompressionAlgorithm::Identity => {
-                    set.identity = true;
+                    // noop
                 }
             }
         }
@@ -129,10 +118,7 @@ mod test {
 
         assert_eq!(
             serde_json::from_str::<CompressionSet>(json).unwrap(),
-            CompressionSet {
-                zstd: false,
-                identity: true
-            }
+            CompressionSet { zstd: false }
         );
     }
 
@@ -147,10 +133,7 @@ mod test {
 
         assert_eq!(
             serde_json::from_str::<CompressionSet>(json).unwrap(),
-            CompressionSet {
-                zstd: true,
-                identity: true
-            }
+            CompressionSet { zstd: true }
         );
     }
 
@@ -164,10 +147,7 @@ mod test {
 
         assert_eq!(
             serde_json::from_str::<CompressionSet>(json).unwrap(),
-            CompressionSet {
-                zstd: true,
-                identity: false
-            }
+            CompressionSet { zstd: true }
         );
     }
 
@@ -182,10 +162,7 @@ mod test {
 
         assert_eq!(
             serde_json::from_str::<CompressionSet>(json).unwrap(),
-            CompressionSet {
-                zstd: true,
-                identity: false
-            }
+            CompressionSet { zstd: true }
         );
     }
 }
