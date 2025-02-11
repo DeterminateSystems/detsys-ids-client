@@ -5,6 +5,8 @@ use reqwest::Certificate;
 use reqwest::Url;
 use tracing::Instrument;
 
+use crate::checkin::Checkin;
+use crate::checkin::ServerOptions;
 use crate::submitter::Batch;
 use crate::Map;
 
@@ -19,6 +21,7 @@ type Resolver = trust_dns_resolver::AsyncResolver<
 #[derive(Clone)]
 pub(crate) struct SrvHttpTransport {
     srv: Arc<SrvClient<Resolver>>,
+    server_options: Arc<tokio::sync::RwLock<crate::checkin::ServerOptions>>,
     reqwest: reqwest::Client,
 }
 impl SrvHttpTransport {
@@ -59,6 +62,9 @@ impl SrvHttpTransport {
         Ok(SrvHttpTransport {
             srv: Arc::new(srv),
             reqwest: builder.build()?,
+            server_options: Arc::new(tokio::sync::RwLock::new(
+                crate::checkin::ServerOptions::default(),
+            )),
         })
     }
 }
@@ -70,31 +76,20 @@ impl Transport for SrvHttpTransport {
     async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
         let payload = serde_json::to_string(&batch)?;
         let reqwest = self.reqwest.clone();
+        let server_opts = self.server_options.clone();
 
         let resp = self
             .srv
             .execute(move |mut url| {
-                let payload = payload.clone();
+                let payload: Vec<u8> = payload.as_bytes().into();
                 let reqwest = reqwest.clone();
+                let server_opts = server_opts.clone();
 
                 url.set_path("/events/batch");
-                let span = tracing::trace_span!("submission attempt", host = url.to_string());
 
-                async move {
-                    tracing::trace!("Submitting event logs.");
+                let span = tracing::debug_span!("submission", %url);
 
-                    reqwest
-                        .post(url)
-                        .header(
-                            http::header::CONTENT_TYPE,
-                            crate::transport::APPLICATION_JSON,
-                        )
-                        .body(payload)
-                        .send()
-                        .await
-                        .map_err(SrvHttpTransportError::from)
-                }
-                .instrument(span)
+                perform_request(reqwest, url, payload, server_opts).instrument(span)
             })
             .await?;
 
@@ -112,41 +107,90 @@ impl Transport for SrvHttpTransport {
     ) -> Result<crate::checkin::Checkin, Self::Error> {
         let payload = serde_json::to_string(&session_properties)?;
         let reqwest = self.reqwest.clone();
+        let server_opts = self.server_options.clone();
+
         let resp = self
             .srv
             .execute(move |mut url| {
-                let payload = payload.clone();
+                let payload: Vec<u8> = payload.as_bytes().into();
                 let reqwest = reqwest.clone();
+                let server_opts = server_opts.clone();
+
                 url.set_path("check-in");
 
-                let span = tracing::trace_span!("check-in attempt", host = url.to_string());
+                let span = tracing::trace_span!("check-in attempt", %url);
 
-                async move {
-                    tracing::trace!("Fetching check-in configuration.");
-
-                    reqwest
-                        .post(url)
-                        .header(
-                            http::header::CONTENT_TYPE,
-                            crate::transport::APPLICATION_JSON,
-                        )
-                        .body(payload)
-                        .send()
-                        .await
-                        .map_err(SrvHttpTransportError::from)
-                }
-                .instrument(span)
+                perform_request(reqwest, url, payload, server_opts).instrument(span)
             })
             .await?;
 
-        Ok(resp.json().await?)
+        let checkin: Checkin = resp.json().await?;
+
+        // Update server options to sync up compression options
+        {
+            let mut opts = self.server_options.write().await;
+            *opts = checkin.server_options.clone();
+        }
+
+        Ok(checkin)
     }
+}
+
+#[tracing::instrument(skip(reqwest, payload, server_opts))]
+async fn perform_request(
+    reqwest: reqwest::Client,
+    url: url::Url,
+    payload: Vec<u8>,
+    server_opts: Arc<tokio::sync::RwLock<ServerOptions>>,
+) -> Result<reqwest::Response, SrvHttpTransportError> {
+    let algos = server_opts.read().await.compression_algorithms.into_iter();
+
+    for compression_algo in algos {
+        let span = tracing::debug_span!("requesting", ?compression_algo);
+
+        let mut req = reqwest
+            .post(url.clone())
+            .header(
+                http::header::CONTENT_TYPE,
+                crate::transport::APPLICATION_JSON,
+            )
+            .body(compression_algo.compress(&payload).await?);
+
+        if let Some(encoding) = compression_algo.content_encoding() {
+            req = req.header(http::header::CONTENT_ENCODING, encoding);
+        }
+
+        tracing::trace!(parent: &span, "Requesting");
+        match req.send().instrument(span.clone()).await {
+            Ok(resp) if resp.status() == http::StatusCode::UNSUPPORTED_MEDIA_TYPE => {
+                tracing::debug!(
+                    ?compression_algo,
+                    "Disabling compression algorithm because it is unsupported"
+                );
+                server_opts
+                    .write()
+                    .await
+                    .compression_algorithms
+                    .delete(&compression_algo);
+            }
+
+            Err(e) => {
+                return Err(SrvHttpTransportError::from(e));
+            }
+            Ok(resp) => return Ok(resp),
+        }
+    }
+
+    Err(SrvHttpTransportError::NoCompressionMode)
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum SrvHttpTransportError {
     #[error(transparent)]
     SrvError(#[from] detsys_srv::Error<<Resolver as detsys_srv::resolver::SrvResolver>::Error>),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
@@ -159,4 +203,7 @@ pub enum SrvHttpTransportError {
 
     #[error(transparent)]
     UrlParse(#[from] url::ParseError),
+
+    #[error("The server has rejected all of our compression modes")]
+    NoCompressionMode,
 }

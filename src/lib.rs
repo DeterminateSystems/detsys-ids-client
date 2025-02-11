@@ -1,6 +1,7 @@
 mod builder;
 pub mod checkin;
 mod collator;
+mod compression_set;
 mod configuration_proxy;
 mod ds_correlation;
 mod identity;
