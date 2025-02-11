@@ -19,7 +19,14 @@ pub struct Worker {
 impl Worker {
     #[cfg_attr(
         feature = "tracing-instrument",
-        tracing::instrument(skip(system_snapshotter, transport))
+        tracing::instrument(skip(
+            distinct_id,
+            device_id,
+            facts,
+            groups,
+            system_snapshotter,
+            transport
+        ))
     )]
     pub(crate) async fn new<F: SystemSnapshotter, T: Transport + Sync + 'static>(
         distinct_id: Option<DistinctId>,
