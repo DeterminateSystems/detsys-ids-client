@@ -88,9 +88,8 @@ impl Builder {
     ///
     /// let (recorder, worker) = builder!()
     ///   .set_enable_reporting(cli.no_telemetry)
-    ///   .build()
-    ///   .await
-    ///   .unwrap();
+    ///   .build_or_default()
+    ///   .await;
     /// # })
     /// ```
     pub fn set_enable_reporting(mut self, enable_reporting: bool) -> Self {
@@ -138,31 +137,52 @@ impl Builder {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn build(self) -> Result<(Recorder, Worker), TransportsError> {
-        self.build_with_snapshotter(crate::system_snapshot::Generic::default())
+    pub async fn try_build(mut self) -> Result<(Recorder, Worker), TransportsError> {
+        let transport = self.transport().await?;
+
+        Ok(self
+            .build_with_transport_snapshotter(transport, crate::system_snapshot::Generic::default())
+            .await)
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub async fn build_or_default(mut self) -> (Recorder, Worker) {
+        let transport = self.transport_or_default().await;
+
+        self.build_with_transport_snapshotter(transport, crate::system_snapshot::Generic::default())
             .await
     }
 
     #[tracing::instrument(skip(self, snapshotter))]
-    pub async fn build_with_snapshotter<S: SystemSnapshotter>(
+    pub async fn try_build_with_snapshotter<S: SystemSnapshotter>(
         mut self,
         snapshotter: S,
     ) -> Result<(Recorder, Worker), TransportsError> {
-        let transport = if self.enable_reporting {
-            crate::transport::Transports::try_new(
-                self.endpoint.take(),
-                self.timeout
-                    .take()
-                    .unwrap_or_else(|| Duration::from_secs(3)),
-                self.certificate.take(),
-                self.proxy.take(),
-            )
-            .await?
-        } else {
-            crate::transport::Transports::none()
-        };
+        let transport = self.transport().await?;
 
-        let (recorder, worker) = Worker::new(
+        Ok(self
+            .build_with_transport_snapshotter(transport, snapshotter)
+            .await)
+    }
+
+    #[tracing::instrument(skip(self, snapshotter))]
+    pub async fn build_or_default_with_snapshotter<S: SystemSnapshotter>(
+        mut self,
+        snapshotter: S,
+    ) -> (Recorder, Worker) {
+        let transport = self.transport_or_default().await;
+
+        self.build_with_transport_snapshotter(transport, snapshotter)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, transport, snapshotter))]
+    async fn build_with_transport_snapshotter<S: SystemSnapshotter>(
+        &mut self,
+        transport: crate::transport::Transports,
+        snapshotter: S,
+    ) -> (Recorder, Worker) {
+        Worker::new(
             self.distinct_id.take(),
             self.device_id.take(),
             self.facts.take(),
@@ -170,9 +190,52 @@ impl Builder {
             snapshotter,
             transport,
         )
-        .await;
+        .await
+    }
 
-        Ok((recorder, worker))
+    async fn transport_or_default(&mut self) -> crate::transport::Transports {
+        match self.transport().await {
+            Ok(t) => {
+                return t;
+            }
+            Err(e) => {
+                tracing::warn!(%e, "Failed to construct the transport as configured, falling back to the default");
+            }
+        }
+
+        match crate::transport::Transports::try_new(
+            None,
+            self.timeout
+                .take()
+                .unwrap_or_else(|| Duration::from_secs(3)),
+            None,
+            None,
+        )
+        .await
+        {
+            Ok(t) => {
+                return t;
+            }
+            Err(e) => {
+                tracing::warn!(%e, "Failed to construct the default transport, falling back to none");
+            }
+        }
+
+        crate::transport::Transports::none()
+    }
+
+    async fn transport(&mut self) -> Result<crate::transport::Transports, TransportsError> {
+        if self.enable_reporting {
+            crate::transport::Transports::try_new(
+                self.endpoint.take(),
+                self.timeout.unwrap_or_else(|| Duration::from_secs(3)),
+                self.certificate.take(),
+                self.proxy.take(),
+            )
+            .await
+        } else {
+            Ok(crate::transport::Transports::none())
+        }
     }
 }
 
