@@ -9,67 +9,96 @@ use crate::{Recorder, Worker};
 
 #[derive(Default)]
 pub struct Builder {
-    distinct_id: Option<DistinctId>,
     device_id: Option<DeviceId>,
+    distinct_id: Option<DistinctId>,
+    enable_reporting: bool,
     endpoint: Option<String>,
     facts: Option<Map>,
     groups: Option<Map>,
+    proxy: Option<Url>,
     ssl_cert: Option<Certificate>,
     timeout: Option<Duration>,
-    proxy: Option<Url>,
 }
 
 impl Builder {
     pub fn new() -> Self {
         Builder {
-            distinct_id: None,
             device_id: None,
+            distinct_id: None,
+            enable_reporting: true,
             endpoint: None,
             facts: None,
             groups: None,
+            proxy: None,
             ssl_cert: None,
             timeout: None,
-            proxy: None,
         }
     }
 
-    pub fn set_distinct_id(&mut self, distinct_id: impl Into<DistinctId>) -> &mut Self {
+    pub fn set_distinct_id(mut self, distinct_id: impl Into<DistinctId>) -> Self {
         self.distinct_id = Some(distinct_id.into());
         self
     }
 
-    pub fn set_device_id(&mut self, device_id: impl Into<DeviceId>) -> &mut Self {
+    pub fn set_device_id(mut self, device_id: impl Into<DeviceId>) -> Self {
         self.device_id = Some(device_id.into());
         self
     }
 
-    pub fn set_facts(&mut self, facts: Map) -> &mut Self {
+    pub fn set_facts(mut self, facts: Map) -> Self {
         self.facts = Some(facts);
         self
     }
 
-    pub fn set_groups(&mut self, groups: Map) -> &mut Self {
+    pub fn set_groups(mut self, groups: Map) -> Self {
         self.groups = Some(groups);
         self
     }
 
     pub fn add_fact(
-        &mut self,
+        mut self,
         key: impl Into<String> + std::fmt::Debug,
         value: impl Into<serde_json::Value>,
-    ) -> &mut Self {
+    ) -> Self {
         self.facts
             .get_or_insert_with(Default::default)
             .insert(key.into(), value.into());
         self
     }
 
-    pub fn set_endpoint(&mut self, endpoint: impl Into<String>) -> &mut Self {
+    pub fn set_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.endpoint = Some(endpoint.into());
         self
     }
 
-    pub fn set_timeout(&mut self, duration: impl Into<Duration>) -> &mut Self {
+    /// Set whether reporting is enabled or disabled.
+    /// Reporting is enabled by default, but this function can be used in a pipeline for easy configuration:
+    ///
+    /// ```rust
+    /// use detsys_ids_client::builder;
+    ///
+    /// struct Cli {
+    ///   no_telemetry: bool,
+    /// }
+    ///
+    ///
+    /// # tokio_test::block_on(async {
+    ///
+    /// let cli = Cli { no_telemetry: false, };
+    ///
+    /// let (recorder, worker) = builder!()
+    ///   .set_enable_reporting(!cli.no_telemetry)
+    ///   .build()
+    ///   .await
+    ///   .unwrap();
+    /// # })
+    /// ```
+    pub fn set_enable_reporting(mut self, enable_reporting: bool) -> Self {
+        self.enable_reporting = enable_reporting;
+        self
+    }
+
+    pub fn set_timeout(mut self, duration: impl Into<Duration>) -> Self {
         self.timeout = Some(duration.into());
         self
     }
@@ -83,7 +112,7 @@ impl Builder {
         Ok(self)
     }
 
-    pub fn set_proxy(&mut self, proxy: Url) -> &mut Self {
+    pub fn set_proxy(mut self, proxy: Url) -> Self {
         self.proxy = Some(proxy);
         self
     }
@@ -99,15 +128,19 @@ impl Builder {
         mut self,
         snapshotter: S,
     ) -> Result<(Recorder, Worker), TransportsError> {
-        let transport = crate::transport::Transports::try_new(
-            self.endpoint.take(),
-            self.timeout
-                .take()
-                .unwrap_or_else(|| Duration::from_secs(3)),
-            self.ssl_cert.take(),
-            self.proxy.take(),
-        )
-        .await?;
+        let transport = if self.enable_reporting {
+            crate::transport::Transports::try_new(
+                self.endpoint.take(),
+                self.timeout
+                    .take()
+                    .unwrap_or_else(|| Duration::from_secs(3)),
+                self.ssl_cert.take(),
+                self.proxy.take(),
+            )
+            .await?
+        } else {
+            crate::transport::Transports::none()
+        };
 
         let (recorder, worker) = Worker::new(
             self.distinct_id.take(),
