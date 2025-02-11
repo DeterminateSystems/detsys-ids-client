@@ -102,30 +102,6 @@ impl Builder {
         self
     }
 
-    /// Set the certificate from a path.
-    ///
-    /// Certificate paths that are invalid or can't be parsed are ignored with a tracing warning.
-    ///
-    /// This function will only set the certificate bundle if the certificates are parsed successfully.
-    ///
-    /// If you would like more strict checking of the certificates, use `set_certificate` directly.
-    pub async fn set_certificate_from_path(
-        self,
-        certificate_path: Option<std::path::PathBuf>,
-    ) -> Self {
-        let Some(path) = certificate_path else {
-            return self;
-        };
-
-        let Ok(certs) = read_cert_file(&path).await.inspect_err(|e| {
-            tracing::warn!(?path, %e, "Failed to parse the TLS certificates");
-        }) else {
-            return self;
-        };
-
-        self.set_certificate(Some(certs))
-    }
-
     pub fn set_certificate(mut self, certificate: Option<Certificate>) -> Self {
         self.certificate = certificate;
         self
@@ -237,23 +213,4 @@ impl Builder {
             Ok(crate::transport::Transports::none())
         }
     }
-}
-
-#[tracing::instrument(ret(level = tracing::Level::TRACE))]
-async fn read_cert_file(
-    ssl_cert_file: impl AsRef<std::path::Path> + std::fmt::Debug,
-) -> Result<Certificate, TransportsError> {
-    let cert_buf = tokio::fs::read(&ssl_cert_file)
-        .await
-        .map_err(|e| TransportsError::Read(ssl_cert_file.as_ref().to_path_buf(), e))?;
-
-    if let Ok(cert) = Certificate::from_pem(cert_buf.as_slice()) {
-        return Ok(cert);
-    }
-
-    if let Ok(cert) = Certificate::from_der(cert_buf.as_slice()) {
-        return Ok(cert);
-    }
-
-    Err(TransportsError::UnknownCertFormat)
 }
