@@ -34,5 +34,7 @@ target-lexicon = "0.13.1"
 is_ci = "1.2.0"
 sys-locale = "0.3.2"
 iana-time-zone = "0.1.61"
+
+[dev-dependencies]
 tokio-test = "0.4.4"
 
