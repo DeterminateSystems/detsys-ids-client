@@ -68,6 +68,7 @@
               cargo-audit
               cargo-watch
               cargo-nextest
+              cargo-machete
               nixpkgs-fmt
               check.check-rustfmt
               check.check-spelling

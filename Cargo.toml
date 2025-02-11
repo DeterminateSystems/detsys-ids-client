@@ -1,6 +1,6 @@
 [package]
 name = "detsys-ids-client"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "A client for install.determinate.systems."
@@ -34,4 +34,7 @@ target-lexicon = "0.13.1"
 is_ci = "1.2.0"
 sys-locale = "0.3.2"
 iana-time-zone = "0.1.61"
+
+[dev-dependencies]
+tokio-test = "0.4.4"
 

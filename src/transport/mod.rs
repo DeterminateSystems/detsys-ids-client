@@ -40,12 +40,17 @@ pub(crate) fn default_transport_backend() -> (String, Url, Option<Vec<url::Host>
 
 #[derive(Clone)]
 pub(crate) enum Transports {
-    SrvHttp(SrvHttpTransport),
-    Http(ReqwestTransport),
+    None,
     File(FileTransport),
+    Http(ReqwestTransport),
+    SrvHttp(SrvHttpTransport),
 }
 
 impl Transports {
+    pub(crate) fn none() -> Self {
+        Transports::None
+    }
+
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(err(level = tracing::Level::TRACE)))]
     pub(crate) async fn try_new(
         opt_value: Option<String>,
@@ -102,6 +107,9 @@ impl Transport for Transports {
         session_properties: Map,
     ) -> Result<crate::checkin::Checkin, Self::Error> {
         match self {
+            Self::None => Ok(crate::checkin::Checkin {
+                options: std::collections::HashMap::new(),
+            }),
             Self::File(t) => Ok(t.checkin(session_properties).await?),
             Self::Http(t) => Ok(t.checkin(session_properties).await?),
             Self::SrvHttp(t) => Ok(t.checkin(session_properties).await?),
@@ -111,6 +119,7 @@ impl Transport for Transports {
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
     async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
         match self {
+            Self::None => Ok(()),
             Self::File(t) => Ok(t.submit(batch).await?),
             Self::Http(t) => Ok(t.submit(batch).await?),
             Self::SrvHttp(t) => Ok(t.submit(batch).await?),
