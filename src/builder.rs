@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::time::Duration;
 
 use reqwest::Certificate;
@@ -17,7 +16,7 @@ pub struct Builder {
     facts: Option<Map>,
     groups: Option<Map>,
     proxy: Option<Url>,
-    ssl_cert_path: Option<PathBuf>,
+    certificate: Option<Certificate>,
     timeout: Option<Duration>,
 }
 
@@ -31,7 +30,7 @@ impl Builder {
             facts: None,
             groups: None,
             proxy: None,
-            ssl_cert_path: None,
+            certificate: None,
             timeout: None,
         }
     }
@@ -104,11 +103,32 @@ impl Builder {
         self
     }
 
-    /// Set the path to a certificate bundle.
+    /// Set the certificate from a path.
     ///
-    /// Note: certificate paths that are invalid or can't be parsed are ignored.
-    pub async fn set_ssl_cert_path(mut self, ssl_cert_path: Option<std::path::PathBuf>) -> Self {
-        self.ssl_cert_path = ssl_cert_path;
+    /// Certificate paths that are invalid or can't be parsed are ignored with a tracing warning.
+    ///
+    /// This function will only set the certificate bundle if the certificates are parsed successfully.
+    ///
+    /// If you would like more strict checking of the certificates, use `set_certificate` directly.
+    pub async fn set_certificate_from_path(
+        self,
+        certificate_path: Option<std::path::PathBuf>,
+    ) -> Self {
+        let Some(path) = certificate_path else {
+            return self;
+        };
+
+        let Ok(certs) = read_cert_file(&path).await.inspect_err(|e| {
+            tracing::warn!(?path, %e, "Failed to parse the TLS certificates");
+        }) else {
+            return self;
+        };
+
+        self.set_certificate(Some(certs))
+    }
+
+    pub fn set_certificate(mut self, certificate: Option<Certificate>) -> Self {
+        self.certificate = certificate;
         self
     }
 
@@ -129,23 +149,12 @@ impl Builder {
         snapshotter: S,
     ) -> Result<(Recorder, Worker), TransportsError> {
         let transport = if self.enable_reporting {
-            let certs = if let Some(path) = self.ssl_cert_path.take() {
-                read_cert_file(&path)
-                    .await
-                    .inspect_err(|e| {
-                        tracing::warn!(?path, %e, "Failed to parse the TLS certificates");
-                    })
-                    .ok()
-            } else {
-                None
-            };
-
             crate::transport::Transports::try_new(
                 self.endpoint.take(),
                 self.timeout
                     .take()
                     .unwrap_or_else(|| Duration::from_secs(3)),
-                certs,
+                self.certificate.take(),
                 self.proxy.take(),
             )
             .await?
