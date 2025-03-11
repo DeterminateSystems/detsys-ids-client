@@ -70,8 +70,10 @@ pub(crate) enum SnapshotError {
     Reply(String),
 }
 
-pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter> {
+pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage>
+{
     system_snapshotter: F,
+    storage: P,
     incoming: Receiver<RawSignal>,
     outgoing: Sender<CollatedSignal>,
     session_id: String,
@@ -82,10 +84,11 @@ pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter> {
     featurefacts: FeatureFacts,
     groups: Map,
 }
-impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
+impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> Collator<F, P> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
+    pub(crate) async fn new(
         system_snapshotter: F,
+        storage: P,
         incoming: Receiver<RawSignal>,
         outgoing: Sender<CollatedSignal>,
         anonymous_distinct_id: Option<AnonymousDistinctId>,
@@ -98,21 +101,34 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         facts.append(&mut correlation_data.properties);
         groups.append(&mut correlation_data.groups_as_map());
 
+        let stored_ident = storage.load().await.ok().flatten();
+
         Self {
             system_snapshotter,
+            storage,
             incoming,
             outgoing,
             session_id: correlation_data
                 .session_id
                 .unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
-            anon_distinct_id: anonymous_distinct_id.unwrap_or_else(|| {
-                correlation_data
+            anon_distinct_id: anonymous_distinct_id
+                .or(stored_ident
+                    .as_ref()
+                    .map(|props| props.anonymous_distinct_id.clone()))
+                .or(correlation_data
                     .anon_distinct_id
-                    .map(AnonymousDistinctId::from)
-                    .unwrap_or_else(|| AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string()))
-            }),
-            distinct_id: distinct_id.or(correlation_data.distinct_id),
-            device_id: device_id.or(correlation_data.device_id).unwrap_or_default(),
+                    .map(AnonymousDistinctId::from))
+                .unwrap_or_else(|| AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string())),
+            distinct_id: distinct_id
+                .or(stored_ident
+                    .as_ref()
+                    .map(|props| props.distinct_id.clone())
+                    .flatten())
+                .or(correlation_data.distinct_id),
+            device_id: device_id
+                .or(stored_ident.map(|props| props.device_id))
+                .or(correlation_data.device_id)
+                .unwrap_or_default(),
             facts,
             featurefacts: FeatureFacts::default(),
             groups,
@@ -120,7 +136,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
     }
 }
 
-impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
+impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> Collator<F, P> {
     fn distinct_id(&self) -> String {
         if let Some(ref distinct_id) = self.distinct_id {
             distinct_id.to_string()

@@ -11,6 +11,7 @@ You can see our privacy policy at https://determinate.systems/policies/privacy/.
 ```mermaid
 flowchart TD
     Recorder --> Collator
+    Storage --> Collator
     ConfigurationProxy --> Recorder
 
     subgraph Worker
@@ -26,6 +27,7 @@ flowchart TD
 Components:
 
 - **Recorder** is the user-interface and cheap to clone, doing all the work over channels.
+- **Storage** models persistent storage between executions, which may be a no-op in-memory implementation.
 - **ConfigurationProxy** reads configuration and feature properties from the **Transport**.
 - **Collator** fetches a recent **SystemSnapshot** from the **SystemSnapshotter** and agggregates the total sum of facts and event data to enrich the basic event data from the **Recorder**. Those events are then sent to the **Submitter**.
 - **SystemSnapshotter** produces a fresh **SystemSnapshot** of the host. This may include properties that change frequently, like thermal state, so a SystemSnapshot must not be reused.
@@ -54,11 +56,13 @@ Components:
 The correlation data is mixed in to the event data by the Collator, and:
 
 - `$session_id` is preferred over generating a new one.
-- `$anon_distinct_id` is preferred over generating a new one, but is unused if the client builder explicitly passes an anonymous distinct ID.
+- `$anon_distinct_id` is preferred over generating a new one.
 - `distinct_id` is used if the user of the library doesn't explicitly pass a distinct ID.
 - `$device_id` is used instead of generating a new one if the user doesn't explicitly pass a device ID.
 - `$groups` is merged in to the user-provided groups.
 - Any additional property is appended to the user-provided facts.
+
+Note that `$anon_distinct_id`, `distinct_id`, and `$device_id` are disregarded if the Storage implementation has stored properties available.
 
 ### To-do
 

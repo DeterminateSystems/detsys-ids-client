@@ -7,6 +7,7 @@ mod ds_correlation;
 mod identity;
 mod json_string;
 mod recorder;
+pub mod storage;
 mod submitter;
 pub mod system_snapshot;
 pub mod transport;

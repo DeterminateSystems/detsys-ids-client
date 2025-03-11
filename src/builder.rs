@@ -4,6 +4,7 @@ use reqwest::Certificate;
 use url::Url;
 
 use crate::identity::AnonymousDistinctId;
+use crate::storage::Storage;
 use crate::transport::TransportsError;
 use crate::{system_snapshot::SystemSnapshotter, DeviceId, DistinctId, Map};
 use crate::{Recorder, Worker};
@@ -128,7 +129,11 @@ impl Builder {
         let transport = self.transport().await?;
 
         Ok(self
-            .build_with_transport_snapshotter(transport, crate::system_snapshot::Generic::default())
+            .build_with(
+                transport,
+                crate::system_snapshot::Generic::default(),
+                crate::storage::Generic::default(),
+            )
             .await)
     }
 
@@ -136,38 +141,42 @@ impl Builder {
     pub async fn build_or_default(mut self) -> (Recorder, Worker) {
         let transport = self.transport_or_default().await;
 
-        self.build_with_transport_snapshotter(transport, crate::system_snapshot::Generic::default())
-            .await
+        self.build_with(
+            transport,
+            crate::system_snapshot::Generic::default(),
+            crate::storage::Generic::default(),
+        )
+        .await
     }
 
-    #[tracing::instrument(skip(self, snapshotter))]
-    pub async fn try_build_with_snapshotter<S: SystemSnapshotter>(
+    #[tracing::instrument(skip(self, snapshotter, storage))]
+    pub async fn try_build_with<S: SystemSnapshotter, P: Storage>(
         mut self,
         snapshotter: S,
+        storage: P,
     ) -> Result<(Recorder, Worker), TransportsError> {
         let transport = self.transport().await?;
 
-        Ok(self
-            .build_with_transport_snapshotter(transport, snapshotter)
-            .await)
+        Ok(self.build_with(transport, snapshotter, storage).await)
     }
 
-    #[tracing::instrument(skip(self, snapshotter))]
-    pub async fn build_or_default_with_snapshotter<S: SystemSnapshotter>(
+    #[tracing::instrument(skip(self, snapshotter, storage))]
+    pub async fn build_or_default_with_snapshotter<S: SystemSnapshotter, P: Storage>(
         mut self,
         snapshotter: S,
+        storage: P,
     ) -> (Recorder, Worker) {
         let transport = self.transport_or_default().await;
 
-        self.build_with_transport_snapshotter(transport, snapshotter)
-            .await
+        self.build_with(transport, snapshotter, storage).await
     }
 
-    #[tracing::instrument(skip(self, transport, snapshotter))]
-    async fn build_with_transport_snapshotter<S: SystemSnapshotter>(
+    #[tracing::instrument(skip(self, transport, snapshotter, storage))]
+    async fn build_with<S: SystemSnapshotter, P: Storage>(
         &mut self,
         transport: crate::transport::Transports,
         snapshotter: S,
+        storage: P,
     ) -> (Recorder, Worker) {
         Worker::new(
             self.anonymous_distinct_id.take(),
@@ -176,6 +185,7 @@ impl Builder {
             self.facts.take(),
             self.groups.take(),
             snapshotter,
+            storage,
             transport,
         )
         .await
