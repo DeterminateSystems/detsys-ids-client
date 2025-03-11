@@ -161,7 +161,7 @@ impl Builder {
     }
 
     #[tracing::instrument(skip(self, snapshotter, storage))]
-    pub async fn build_or_default_with_snapshotter<S: SystemSnapshotter, P: Storage>(
+    pub async fn build_or_default_with<S: SystemSnapshotter, P: Storage>(
         mut self,
         snapshotter: S,
         storage: P,

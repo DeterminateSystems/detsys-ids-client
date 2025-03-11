@@ -1,6 +1,12 @@
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct AnonymousDistinctId(String);
 
+impl AnonymousDistinctId {
+    pub fn new() -> AnonymousDistinctId {
+        AnonymousDistinctId(uuid::Uuid::now_v7().to_string())
+    }
+}
+
 impl From<String> for AnonymousDistinctId {
     fn from(value: String) -> Self {
         Self(value)

@@ -14,7 +14,7 @@ pub mod transport;
 mod worker;
 
 pub use builder::Builder;
-pub use identity::{DeviceId, DistinctId};
+pub use identity::{AnonymousDistinctId, DeviceId, DistinctId};
 pub use recorder::Recorder;
 pub use worker::Worker;
 
