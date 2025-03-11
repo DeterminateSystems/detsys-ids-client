@@ -5,6 +5,7 @@ use tracing::Instrument;
 use crate::collator::{Collator, SnapshotError};
 use crate::configuration_proxy::{ConfigurationProxy, ConfigurationProxyError};
 use crate::ds_correlation::Correlation;
+use crate::identity::AnonymousDistinctId;
 use crate::submitter::Submitter;
 use crate::system_snapshot::SystemSnapshotter;
 use crate::transport::Transport;
@@ -20,6 +21,7 @@ impl Worker {
     #[cfg_attr(
         feature = "tracing-instrument",
         tracing::instrument(skip(
+            anonymous_distinct_id,
             distinct_id,
             device_id,
             facts,
@@ -29,6 +31,7 @@ impl Worker {
         ))
     )]
     pub(crate) async fn new<F: SystemSnapshotter, T: Transport + Sync + 'static>(
+        anonymous_distinct_id: Option<AnonymousDistinctId>,
         distinct_id: Option<DistinctId>,
         device_id: Option<DeviceId>,
         facts: Option<Map>,
@@ -51,6 +54,7 @@ impl Worker {
             system_snapshotter,
             collator_rx,
             to_submitter,
+            anonymous_distinct_id,
             distinct_id,
             device_id,
             facts.unwrap_or_default(),

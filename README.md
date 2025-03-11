@@ -54,7 +54,7 @@ Components:
 The correlation data is mixed in to the event data by the Collator, and:
 
 - `$session_id` is preferred over generating a new one.
-- `$anon_distinct_id` is preferred over generating a new one.
+- `$anon_distinct_id` is preferred over generating a new one, but is unused if the client builder explicitly passes an anonymous distinct ID.
 - `distinct_id` is used if the user of the library doesn't explicitly pass a distinct ID.
 - `$device_id` is used instead of generating a new one if the user doesn't explicitly pass a device ID.
 - `$groups` is merged in to the user-provided groups.

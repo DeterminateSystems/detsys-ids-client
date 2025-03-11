@@ -4,7 +4,7 @@ use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
 use crate::ds_correlation::Correlation;
-use crate::identity::{DeviceId, DistinctId};
+use crate::identity::{AnonymousDistinctId, DeviceId, DistinctId};
 use crate::recorder::RawSignal;
 use crate::Map;
 
@@ -75,7 +75,7 @@ pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter> {
     incoming: Receiver<RawSignal>,
     outgoing: Sender<CollatedSignal>,
     session_id: String,
-    anon_distinct_id: String,
+    anon_distinct_id: AnonymousDistinctId,
     distinct_id: Option<DistinctId>,
     device_id: DeviceId,
     facts: Map,
@@ -88,6 +88,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         system_snapshotter: F,
         incoming: Receiver<RawSignal>,
         outgoing: Sender<CollatedSignal>,
+        anonymous_distinct_id: Option<AnonymousDistinctId>,
         distinct_id: Option<DistinctId>,
         device_id: Option<DeviceId>,
         mut facts: Map,
@@ -104,9 +105,12 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
             session_id: correlation_data
                 .session_id
                 .unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
-            anon_distinct_id: correlation_data
-                .anon_distinct_id
-                .unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
+            anon_distinct_id: anonymous_distinct_id.unwrap_or_else(|| {
+                correlation_data
+                    .anon_distinct_id
+                    .map(AnonymousDistinctId::from)
+                    .unwrap_or_else(|| AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string()))
+            }),
             distinct_id: distinct_id.or(correlation_data.distinct_id),
             device_id: device_id.or(correlation_data.device_id).unwrap_or_default(),
             facts,
@@ -121,7 +125,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         if let Some(ref distinct_id) = self.distinct_id {
             distinct_id.to_string()
         } else {
-            self.anon_distinct_id.clone()
+            self.anon_distinct_id.to_string()
         }
     }
 
@@ -181,7 +185,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         properties: Option<Map>,
     ) -> Event {
         Event {
-            anon_distinct_id: self.anon_distinct_id.clone(),
+            anon_distinct_id: self.anon_distinct_id.to_string(),
             distinct_id: self.distinct_id(),
             name: event,
 
@@ -215,7 +219,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         props.insert("distinct_id".into(), self.distinct_id().into());
         props.insert(
             "$anon_distinct_id".into(),
-            self.anon_distinct_id.clone().into(),
+            self.anon_distinct_id.to_string().into(),
         );
         props.insert(
             "groups".into(),
@@ -261,7 +265,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
 
         if old.is_some() {
             // Reset our anon distinct ID so we don't link the old id to the new id
-            self.anon_distinct_id = uuid::Uuid::now_v7().to_string();
+            self.anon_distinct_id = AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string());
         }
 
         let snapshot = self.system_snapshotter.snapshot();

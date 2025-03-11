@@ -3,6 +3,7 @@ use std::time::Duration;
 use reqwest::Certificate;
 use url::Url;
 
+use crate::identity::AnonymousDistinctId;
 use crate::transport::TransportsError;
 use crate::{system_snapshot::SystemSnapshotter, DeviceId, DistinctId, Map};
 use crate::{Recorder, Worker};
@@ -11,6 +12,7 @@ use crate::{Recorder, Worker};
 pub struct Builder {
     device_id: Option<DeviceId>,
     distinct_id: Option<DistinctId>,
+    anonymous_distinct_id: Option<AnonymousDistinctId>,
     enable_reporting: bool,
     endpoint: Option<String>,
     facts: Option<Map>,
@@ -25,6 +27,7 @@ impl Builder {
         Builder {
             device_id: None,
             distinct_id: None,
+            anonymous_distinct_id: None,
             enable_reporting: true,
             endpoint: None,
             facts: None,
@@ -33,6 +36,14 @@ impl Builder {
             certificate: None,
             timeout: None,
         }
+    }
+
+    pub fn set_anonymous_distinct_id(
+        mut self,
+        anonymous_distinct_id: Option<AnonymousDistinctId>,
+    ) -> Self {
+        self.anonymous_distinct_id = anonymous_distinct_id;
+        self
     }
 
     pub fn set_distinct_id(mut self, distinct_id: Option<DistinctId>) -> Self {
@@ -159,6 +170,7 @@ impl Builder {
         snapshotter: S,
     ) -> (Recorder, Worker) {
         Worker::new(
+            self.anonymous_distinct_id.take(),
             self.distinct_id.take(),
             self.device_id.take(),
             self.facts.take(),
