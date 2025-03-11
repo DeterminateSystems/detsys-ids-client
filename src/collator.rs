@@ -284,6 +284,18 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             self.anon_distinct_id = AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string());
         }
 
+        if let Err(e) = self
+            .storage
+            .store(&crate::storage::StoredProperties {
+                distinct_id: self.distinct_id.clone(),
+                anonymous_distinct_id: self.anon_distinct_id.clone(),
+                device_id: self.device_id.clone(),
+            })
+            .await
+        {
+            tracing::debug!(%e, "Storage error");
+        }
+
         let snapshot = self.system_snapshotter.snapshot();
 
         self.outgoing
