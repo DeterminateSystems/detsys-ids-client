@@ -7,6 +7,12 @@ impl AnonymousDistinctId {
     }
 }
 
+impl Default for AnonymousDistinctId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<String> for AnonymousDistinctId {
     fn from(value: String) -> Self {
         Self(value)

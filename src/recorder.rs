@@ -25,6 +25,7 @@ pub(crate) enum RawSignal {
     FlushNow,
     Identify(DistinctId),
     Alias(String),
+    Reset,
 }
 
 #[derive(Clone)]
@@ -198,6 +199,22 @@ impl Recorder {
             .await
         {
             tracing::error!(error = ?e, "Failed to enqueue Alias message");
+        }
+
+        self.trigger_configuration_refresh()
+            .instrument(tracing::trace_span!("triggering a configuration refresh"))
+            .await;
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    pub async fn reset(&self) {
+        if let Err(e) = self
+            .outgoing
+            .send(RawSignal::Reset)
+            .instrument(tracing::trace_span!("sending the Reset message"))
+            .await
+        {
+            tracing::error!(error = ?e, "Failed to enqueue reset message");
         }
 
         self.trigger_configuration_refresh()

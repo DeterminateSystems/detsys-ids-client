@@ -122,8 +122,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             distinct_id: distinct_id
                 .or(stored_ident
                     .as_ref()
-                    .map(|props| props.distinct_id.clone())
-                    .flatten())
+                    .and_then(|props| props.distinct_id.clone()))
                 .or(correlation_data.distinct_id),
             device_id: device_id
                 .or(stored_ident.map(|props| props.device_id))
@@ -174,6 +173,9 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 }
                 RawSignal::Alias(alias) => {
                     self.handle_message_alias(alias).await?;
+                }
+                RawSignal::Reset => {
+                    self.handle_message_reset().await?;
                 }
                 RawSignal::FlushNow => {
                     self.handle_message_flush_now().await?;
@@ -326,6 +328,26 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             )))
             .await
             .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    async fn handle_message_reset(&mut self) -> Result<(), SnapshotError> {
+        self.distinct_id = None;
+        self.anon_distinct_id = AnonymousDistinctId::new();
+
+        if let Err(e) = self
+            .storage
+            .store(&crate::storage::StoredProperties {
+                distinct_id: self.distinct_id.clone(),
+                anonymous_distinct_id: self.anon_distinct_id.clone(),
+                device_id: self.device_id.clone(),
+            })
+            .await
+        {
+            tracing::debug!(%e, "Storage error");
+        }
 
         Ok(())
     }
