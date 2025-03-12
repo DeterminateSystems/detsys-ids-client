@@ -124,12 +124,14 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 })
                 .unwrap_or_else(|| AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string())),
             distinct_id: distinct_id
-                .or(stored_ident
-                    .as_ref()
-                    .and_then(|props| props.distinct_id.clone()))
+                .or_else(|| {
+                    stored_ident
+                        .as_ref()
+                        .and_then(|props| props.distinct_id.clone())
+                })
                 .or(correlation_data.distinct_id),
             device_id: device_id
-                .or(stored_ident.map(|props| props.device_id))
+                .or_else(|| stored_ident.map(|props| props.device_id))
                 .or(correlation_data.device_id)
                 .unwrap_or_default(),
             facts,
