@@ -19,6 +19,6 @@ pub trait Storage: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<Option<StoredProperties>, Self::Error>> + Send;
     fn store(
         &mut self,
-        properties: &StoredProperties,
+        properties: StoredProperties,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 }

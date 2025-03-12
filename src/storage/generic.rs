@@ -12,8 +12,8 @@ impl super::Storage for Generic {
         Ok((*self.state.read().await).clone())
     }
 
-    async fn store(&mut self, properties: &super::StoredProperties) -> Result<(), Self::Error> {
-        *self.state.write().await = Some(properties.clone());
+    async fn store(&mut self, properties: super::StoredProperties) -> Result<(), Self::Error> {
+        *self.state.write().await = Some(properties);
         Ok(())
     }
 }

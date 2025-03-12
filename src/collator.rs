@@ -288,7 +288,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
 
         if let Err(e) = self
             .storage
-            .store(&crate::storage::StoredProperties {
+            .store(crate::storage::StoredProperties {
                 distinct_id: self.distinct_id.clone(),
                 anonymous_distinct_id: self.anon_distinct_id.clone(),
                 device_id: self.device_id.clone(),
@@ -339,7 +339,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
 
         if let Err(e) = self
             .storage
-            .store(&crate::storage::StoredProperties {
+            .store(crate::storage::StoredProperties {
                 distinct_id: self.distinct_id.clone(),
                 anonymous_distinct_id: self.anon_distinct_id.clone(),
                 device_id: self.device_id.clone(),
