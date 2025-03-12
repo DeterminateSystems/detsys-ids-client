@@ -4,7 +4,7 @@ pub use generic::Generic;
 use crate::identity::AnonymousDistinctId;
 use crate::{DeviceId, DistinctId};
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StoredProperties {
     pub anonymous_distinct_id: AnonymousDistinctId,
     pub distinct_id: Option<DistinctId>,
