@@ -112,12 +112,16 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 .session_id
                 .unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
             anon_distinct_id: anonymous_distinct_id
-                .or(stored_ident
-                    .as_ref()
-                    .map(|props| props.anonymous_distinct_id.clone()))
-                .or(correlation_data
-                    .anon_distinct_id
-                    .map(AnonymousDistinctId::from))
+                .or_else(|| {
+                    stored_ident
+                        .as_ref()
+                        .map(|props| props.anonymous_distinct_id.clone())
+                })
+                .or_else(|| {
+                    correlation_data
+                        .anon_distinct_id
+                        .map(AnonymousDistinctId::from)
+                })
                 .unwrap_or_else(|| AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string())),
             distinct_id: distinct_id
                 .or(stored_ident
