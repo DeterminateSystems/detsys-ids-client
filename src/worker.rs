@@ -5,6 +5,8 @@ use tracing::Instrument;
 use crate::collator::{Collator, SnapshotError};
 use crate::configuration_proxy::{ConfigurationProxy, ConfigurationProxyError};
 use crate::ds_correlation::Correlation;
+use crate::identity::AnonymousDistinctId;
+use crate::storage::Storage;
 use crate::submitter::Submitter;
 use crate::system_snapshot::SystemSnapshotter;
 use crate::transport::Transport;
@@ -20,20 +22,25 @@ impl Worker {
     #[cfg_attr(
         feature = "tracing-instrument",
         tracing::instrument(skip(
+            anonymous_distinct_id,
             distinct_id,
             device_id,
             facts,
             groups,
             system_snapshotter,
+            storage,
             transport
         ))
     )]
-    pub(crate) async fn new<F: SystemSnapshotter, T: Transport + Sync + 'static>(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn new<F: SystemSnapshotter, P: Storage, T: Transport + Sync + 'static>(
+        anonymous_distinct_id: Option<AnonymousDistinctId>,
         distinct_id: Option<DistinctId>,
         device_id: Option<DeviceId>,
         facts: Option<Map>,
         groups: Option<Map>,
         system_snapshotter: F,
+        storage: P,
         transport: T,
     ) -> (Recorder, Worker) {
         // Message flow:
@@ -49,14 +56,17 @@ impl Worker {
         let configuration = ConfigurationProxy::new(transport.clone(), configuration_proxy_rx);
         let collator = Collator::new(
             system_snapshotter,
+            storage,
             collator_rx,
             to_submitter,
+            anonymous_distinct_id,
             distinct_id,
             device_id,
             facts.unwrap_or_default(),
             groups.unwrap_or_default(),
             Correlation::import(),
-        );
+        )
+        .await;
         let submitter = Submitter::new(transport, submitter_rx);
 
         let span = tracing::debug_span!("spawned worker");

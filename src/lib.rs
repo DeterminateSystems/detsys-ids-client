@@ -7,13 +7,14 @@ mod ds_correlation;
 mod identity;
 mod json_string;
 mod recorder;
+pub mod storage;
 mod submitter;
 pub mod system_snapshot;
 pub mod transport;
 mod worker;
 
 pub use builder::Builder;
-pub use identity::{DeviceId, DistinctId};
+pub use identity::{AnonymousDistinctId, DeviceId, DistinctId};
 pub use recorder::Recorder;
 pub use worker::Worker;
 

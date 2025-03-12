@@ -4,7 +4,7 @@ use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
 use crate::ds_correlation::Correlation;
-use crate::identity::{DeviceId, DistinctId};
+use crate::identity::{AnonymousDistinctId, DeviceId, DistinctId};
 use crate::recorder::RawSignal;
 use crate::Map;
 
@@ -70,24 +70,28 @@ pub(crate) enum SnapshotError {
     Reply(String),
 }
 
-pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter> {
+pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage>
+{
     system_snapshotter: F,
+    storage: P,
     incoming: Receiver<RawSignal>,
     outgoing: Sender<CollatedSignal>,
     session_id: String,
-    anon_distinct_id: String,
+    anon_distinct_id: AnonymousDistinctId,
     distinct_id: Option<DistinctId>,
     device_id: DeviceId,
     facts: Map,
     featurefacts: FeatureFacts,
     groups: Map,
 }
-impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
+impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> Collator<F, P> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
+    pub(crate) async fn new(
         system_snapshotter: F,
+        storage: P,
         incoming: Receiver<RawSignal>,
         outgoing: Sender<CollatedSignal>,
+        anonymous_distinct_id: Option<AnonymousDistinctId>,
         distinct_id: Option<DistinctId>,
         device_id: Option<DeviceId>,
         mut facts: Map,
@@ -97,18 +101,39 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         facts.append(&mut correlation_data.properties);
         groups.append(&mut correlation_data.groups_as_map());
 
+        let stored_ident = storage.load().await.ok().flatten();
+
         Self {
             system_snapshotter,
+            storage,
             incoming,
             outgoing,
             session_id: correlation_data
                 .session_id
                 .unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
-            anon_distinct_id: correlation_data
-                .anon_distinct_id
-                .unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
-            distinct_id: distinct_id.or(correlation_data.distinct_id),
-            device_id: device_id.or(correlation_data.device_id).unwrap_or_default(),
+            anon_distinct_id: anonymous_distinct_id
+                .or_else(|| {
+                    stored_ident
+                        .as_ref()
+                        .map(|props| props.anonymous_distinct_id.clone())
+                })
+                .or_else(|| {
+                    correlation_data
+                        .anon_distinct_id
+                        .map(AnonymousDistinctId::from)
+                })
+                .unwrap_or_else(|| AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string())),
+            distinct_id: distinct_id
+                .or_else(|| {
+                    stored_ident
+                        .as_ref()
+                        .and_then(|props| props.distinct_id.clone())
+                })
+                .or(correlation_data.distinct_id),
+            device_id: device_id
+                .or_else(|| stored_ident.map(|props| props.device_id))
+                .or(correlation_data.device_id)
+                .unwrap_or_default(),
             facts,
             featurefacts: FeatureFacts::default(),
             groups,
@@ -116,12 +141,12 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
     }
 }
 
-impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
+impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> Collator<F, P> {
     fn distinct_id(&self) -> String {
         if let Some(ref distinct_id) = self.distinct_id {
             distinct_id.to_string()
         } else {
-            self.anon_distinct_id.clone()
+            self.anon_distinct_id.to_string()
         }
     }
 
@@ -155,6 +180,9 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
                 RawSignal::Alias(alias) => {
                     self.handle_message_alias(alias).await?;
                 }
+                RawSignal::Reset => {
+                    self.handle_message_reset().await?;
+                }
                 RawSignal::FlushNow => {
                     self.handle_message_flush_now().await?;
                 }
@@ -181,7 +209,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         properties: Option<Map>,
     ) -> Event {
         Event {
-            anon_distinct_id: self.anon_distinct_id.clone(),
+            anon_distinct_id: self.anon_distinct_id.to_string(),
             distinct_id: self.distinct_id(),
             name: event,
 
@@ -215,7 +243,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
         props.insert("distinct_id".into(), self.distinct_id().into());
         props.insert(
             "$anon_distinct_id".into(),
-            self.anon_distinct_id.clone().into(),
+            self.anon_distinct_id.to_string().into(),
         );
         props.insert(
             "groups".into(),
@@ -261,7 +289,19 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
 
         if old.is_some() {
             // Reset our anon distinct ID so we don't link the old id to the new id
-            self.anon_distinct_id = uuid::Uuid::now_v7().to_string();
+            self.anon_distinct_id = AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string());
+        }
+
+        if let Err(e) = self
+            .storage
+            .store(crate::storage::StoredProperties {
+                distinct_id: self.distinct_id.clone(),
+                anonymous_distinct_id: self.anon_distinct_id.clone(),
+                device_id: self.device_id.clone(),
+            })
+            .await
+        {
+            tracing::debug!(%e, "Storage error");
         }
 
         let snapshot = self.system_snapshotter.snapshot();
@@ -294,6 +334,26 @@ impl<F: crate::system_snapshot::SystemSnapshotter> Collator<F> {
             )))
             .await
             .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    async fn handle_message_reset(&mut self) -> Result<(), SnapshotError> {
+        self.distinct_id = None;
+        self.anon_distinct_id = AnonymousDistinctId::new();
+
+        if let Err(e) = self
+            .storage
+            .store(crate::storage::StoredProperties {
+                distinct_id: self.distinct_id.clone(),
+                anonymous_distinct_id: self.anon_distinct_id.clone(),
+                device_id: self.device_id.clone(),
+            })
+            .await
+        {
+            tracing::debug!(%e, "Storage error");
+        }
 
         Ok(())
     }

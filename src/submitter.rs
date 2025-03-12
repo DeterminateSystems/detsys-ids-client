@@ -69,6 +69,8 @@ impl<T: crate::transport::Transport> Submitter<T> {
             batch: &self.events,
         };
 
+        tracing::trace!(?batch, "Submitting batch");
+
         match self.transport.submit(batch).await {
             Ok(_) => {
                 tracing::trace!("submitted events");
