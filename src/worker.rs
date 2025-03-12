@@ -32,6 +32,7 @@ impl Worker {
             transport
         ))
     )]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new<F: SystemSnapshotter, P: Storage, T: Transport + Sync + 'static>(
         anonymous_distinct_id: Option<AnonymousDistinctId>,
         distinct_id: Option<DistinctId>,
