@@ -78,6 +78,6 @@ impl Default for SystemSnapshot {
     }
 }
 
-pub trait SystemSnapshotter: Send + 'static {
-    fn snapshot(&mut self) -> SystemSnapshot;
+pub trait SystemSnapshotter: Send + Sync + 'static {
+    fn snapshot(&self) -> SystemSnapshot;
 }
