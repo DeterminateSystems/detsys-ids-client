@@ -1,6 +1,7 @@
 use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot::Sender as OneshotSender;
+use tokio::sync::Mutex;
 use tracing::Instrument;
 
 use crate::ds_correlation::Correlation;
@@ -72,7 +73,7 @@ pub(crate) enum SnapshotError {
 
 pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage>
 {
-    system_snapshotter: F,
+    system_snapshotter: Mutex<F>,
     storage: P,
     incoming: Receiver<RawSignal>,
     outgoing: Sender<CollatedSignal>,
@@ -104,7 +105,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         let stored_ident = storage.load().await.ok().flatten();
 
         Self {
-            system_snapshotter,
+            system_snapshotter: Mutex::new(system_snapshotter),
             storage,
             incoming,
             outgoing,
@@ -266,7 +267,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         event_name: String,
         properties: Option<Map>,
     ) -> Result<(), SnapshotError> {
-        let snapshot = self.system_snapshotter.snapshot();
+        let snapshot = self.system_snapshotter.lock().await.snapshot();
         self.outgoing
             .send(CollatedSignal::Event(
                 self.msg_to_event(snapshot, event_name, properties),
@@ -298,7 +299,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             tracing::debug!(%e, "Storage error");
         }
 
-        let snapshot = self.system_snapshotter.snapshot();
+        let snapshot = self.system_snapshotter.lock().await.snapshot();
 
         self.outgoing
             .send(CollatedSignal::Event(self.msg_to_event(
@@ -318,7 +319,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
 
         properties.insert("alias".to_string(), alias.into());
 
-        let snapshot = self.system_snapshotter.snapshot();
+        let snapshot = self.system_snapshotter.lock().await.snapshot();
 
         self.outgoing
             .send(CollatedSignal::Event(self.msg_to_event(
