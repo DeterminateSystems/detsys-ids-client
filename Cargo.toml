@@ -1,6 +1,6 @@
 [package]
 name = "detsys-ids-client"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "A client for install.determinate.systems."
@@ -28,9 +28,9 @@ uuid = { version = "1.12.1", features = [ "v4", "v7", "serde"] }
 thiserror = "2.0.11"
 url = "2.5.4"
 
-detsys-srv = "0.3"
+detsys-srv = "0.4"
 http = "1.2.0"
-trust-dns-resolver = "0.23.2"
+hickory-resolver = "0.25.1"
 target-lexicon = "0.13.1"
 is_ci = "1.2.0"
 sys-locale = "0.3.2"

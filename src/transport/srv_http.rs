@@ -12,11 +12,12 @@ use crate::Map;
 
 use super::Transport;
 
-type Resolver = trust_dns_resolver::AsyncResolver<
-    trust_dns_resolver::name_server::GenericConnector<
-        trust_dns_resolver::name_server::TokioRuntimeProvider,
-    >,
->;
+type Resolver = hickory_resolver::TokioResolver;
+// type Resolver = hickory_resolver::AsyncResolver<
+//     hickory_resolver::name_server::GenericConnector<
+//         hickory_resolver::name_server::TokioRuntimeProvider,
+//     >,
+// >;
 
 #[derive(Clone)]
 pub(crate) struct SrvHttpTransport {
@@ -37,14 +38,13 @@ impl SrvHttpTransport {
         let record = record.into();
         let fallback = fallback.into();
 
-        let resolver =
-            trust_dns_resolver::AsyncResolver::tokio_from_system_conf().unwrap_or_else(|e| {
-                tracing::debug!(%e, "Failed to load resolv.conf settings, falling back to Google DNS.");
-                trust_dns_resolver::AsyncResolver::tokio(
-                    trust_dns_resolver::config::ResolverConfig::google(),
-                    trust_dns_resolver::config::ResolverOpts::default(),
-                )
-            });
+        let resolver = hickory_resolver::TokioResolver::builder_tokio().unwrap_or_else(|e| {
+            tracing::debug!(%e, "Failed to load resolv.conf settings, falling back to Google DNS.");
+            hickory_resolver::Resolver::builder_with_config(
+                hickory_resolver::config::ResolverConfig::google(),
+                hickory_resolver::name_server::TokioConnectionProvider::default(),
+            )
+        }).build();
 
         let srv =
             SrvClient::<Resolver>::new_with_resolver(&record, fallback, allowed_suffixes, resolver);
