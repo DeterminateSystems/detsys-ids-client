@@ -30,7 +30,7 @@ url = "2.5.4"
 
 detsys-srv = "0.3"
 http = "1.2.0"
-trust-dns-resolver = "0.23.2"
+hickory-resolver = "0.25.1"
 target-lexicon = "0.13.1"
 is_ci = "1.2.0"
 sys-locale = "0.3.2"
