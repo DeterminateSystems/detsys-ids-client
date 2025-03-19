@@ -38,13 +38,13 @@ impl SrvHttpTransport {
         let record = record.into();
         let fallback = fallback.into();
 
-        let resolver = Arc::new(hickory_resolver::TokioResolver::builder_tokio().unwrap_or_else(|e| {
+        let resolver = hickory_resolver::TokioResolver::builder_tokio().unwrap_or_else(|e| {
             tracing::debug!(%e, "Failed to load resolv.conf settings, falling back to Google DNS.");
             hickory_resolver::Resolver::builder_with_config(
                 hickory_resolver::config::ResolverConfig::google(),
                 hickory_resolver::name_server::TokioConnectionProvider::default(),
             )
-        }).build());
+        }).build();
 
         let srv =
             SrvClient::<Resolver>::new_with_resolver(&record, fallback, allowed_suffixes, resolver);
