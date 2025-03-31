@@ -66,7 +66,7 @@ impl Default for SystemSnapshot {
             stdin_is_terminal: std::io::stdin().is_terminal(),
             is_ci,
 
-            processor_count: system.physical_core_count().map(
+            processor_count: sysinfo::System::physical_core_count().map(
                 |count| count as u64, /* safety: `as` truncates on overflow */
             ),
             physical_memory_bytes: system.total_memory(),
