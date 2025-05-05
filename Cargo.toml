@@ -21,7 +21,7 @@ reqwest = { version = "0.12.12", default-features = false, features = [
 ] }
 serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde_json = "1.0.137"
-sysinfo = { version = "0.34.1", default-features = false, features = [ "system", "disk" ] }
+sysinfo = { version = "0.35.0", default-features = false, features = [ "system", "disk" ] }
 tracing = { version = "0.1" }
 tokio = { version = "1", features = ["full", "tracing"] }
 uuid = { version = "1.12.1", features = [ "v4", "v7", "serde"] }
