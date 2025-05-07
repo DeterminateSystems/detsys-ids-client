@@ -272,7 +272,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         event_name: String,
         properties: Option<Map>,
     ) -> Result<(), SnapshotError> {
-        let snapshot = self.system_snapshotter.snapshot();
+        let snapshot = self.system_snapshotter.snapshot().await;
         self.outgoing
             .send(CollatedSignal::Event(
                 self.msg_to_event(snapshot, event_name, properties),
@@ -304,7 +304,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             tracing::debug!(%e, "Storage error");
         }
 
-        let snapshot = self.system_snapshotter.snapshot();
+        let snapshot = self.system_snapshotter.snapshot().await;
 
         self.outgoing
             .send(CollatedSignal::Event(self.msg_to_event(
@@ -324,7 +324,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
 
         properties.insert("alias".to_string(), alias.into());
 
-        let snapshot = self.system_snapshotter.snapshot();
+        let snapshot = self.system_snapshotter.snapshot().await;
 
         self.outgoing
             .send(CollatedSignal::Event(self.msg_to_event(

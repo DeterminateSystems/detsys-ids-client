@@ -5,7 +5,7 @@ pub struct Generic {}
 
 impl SystemSnapshotter for Generic {
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    fn snapshot(&self) -> SystemSnapshot {
+    async fn snapshot(&self) -> SystemSnapshot {
         SystemSnapshot::default()
     }
 }
