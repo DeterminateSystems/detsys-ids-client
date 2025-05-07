@@ -81,5 +81,5 @@ impl Default for SystemSnapshot {
 }
 
 pub trait SystemSnapshotter: Send + Sync + 'static {
-    fn snapshot(&self) -> SystemSnapshot;
+    fn snapshot(&self) -> impl std::future::Future<Output = SystemSnapshot> + std::marker::Send;
 }
