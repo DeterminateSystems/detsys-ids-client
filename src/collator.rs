@@ -240,6 +240,12 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
     ) -> Result<(), SnapshotError> {
         let mut props = Map::new();
 
+        if let Ok(person_properties) =
+            serde_json::to_value(self.system_snapshotter.snapshot().await)
+        {
+            props.insert("person_properties".into(), person_properties);
+        }
+
         props.insert("distinct_id".into(), self.distinct_id().into());
         props.insert(
             "$anon_distinct_id".into(),
