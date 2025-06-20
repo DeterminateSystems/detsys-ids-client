@@ -64,6 +64,11 @@ The correlation data is mixed in to the event data by the Collator, and:
 
 Note that `$anon_distinct_id`, `distinct_id`, and `$device_id` are disregarded if the Storage implementation has stored properties available.
 
+### Files
+
+- `/var/lib/determinate/identity.json` -- Contains correlation data that is provided by an external tool.
+  This library only reads this file for aiding with feature flagging support.
+
 ### To-do
 
 - Rotate sessions after inactivity: https://github.com/PostHog/posthog-ios/blob/35d7b9306ae932da869a8c1fcadf2232494a5e71/PostHog/PostHogSessionManager.swift#L57-L69
