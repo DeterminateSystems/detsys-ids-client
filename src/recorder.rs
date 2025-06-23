@@ -145,6 +145,27 @@ impl Recorder {
         Some(Feature { variant, payload })
     }
 
+    pub async fn subscribe_to_feature_changes(
+        &self,
+    ) -> Option<tokio::sync::broadcast::Receiver<()>> {
+        let (tx, rx) = oneshot();
+
+        self.to_configuration_proxy
+            .send(ConfigurationProxySignal::Subscribe(tx))
+            .instrument(tracing::debug_span!("subscribe to feature changes"))
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, "Failed to request subscription to feature changes");
+            })
+            .ok()?;
+
+        rx.await
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, "No response when waiting a feature change subscriber");
+            })
+            .ok()
+    }
+
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
     pub async fn add_fact(&self, key: &str, value: serde_json::Value) {
         if let Err(e) = self

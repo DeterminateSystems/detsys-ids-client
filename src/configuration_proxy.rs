@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use thiserror::Error;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
@@ -18,6 +19,7 @@ pub(crate) enum ConfigurationProxySignal {
         OneshotSender<Option<Arc<Feature<serde_json::Value>>>>,
     ),
     CheckInNow(Map, OneshotSender<FeatureFacts>),
+    Subscribe(OneshotSender<broadcast::Receiver<()>>),
 }
 
 #[derive(Error, Debug)]
@@ -29,15 +31,17 @@ pub(crate) enum ConfigurationProxyError {
 pub(crate) struct ConfigurationProxy<T: crate::transport::Transport> {
     checkin: Option<Checkin>,
     transport: T,
-    incoming: Receiver<ConfigurationProxySignal>,
+    incoming: mpsc::Receiver<ConfigurationProxySignal>,
+    change_notifier: broadcast::Sender<()>,
 }
 
 impl<T: crate::transport::Transport> ConfigurationProxy<T> {
-    pub(crate) fn new(transport: T, incoming: Receiver<ConfigurationProxySignal>) -> Self {
+    pub(crate) fn new(transport: T, incoming: mpsc::Receiver<ConfigurationProxySignal>) -> Self {
         Self {
             checkin: None,
             transport,
             incoming,
+            change_notifier: broadcast::Sender::new(1),
         }
     }
 
@@ -56,6 +60,9 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
                 ConfigurationProxySignal::CheckInNow(session_properties, reply) => {
                     self.handle_message_check_in_now(session_properties, reply)
                         .await?;
+                }
+                ConfigurationProxySignal::Subscribe(reply) => {
+                    self.handle_message_subscribe(reply).await?;
                 }
             }
         }
@@ -104,6 +111,21 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
 
         reply
             .send(feature_facts)
+            .map_err(|e| ConfigurationProxyError::Reply(format!("{:?}", e)))?;
+
+        if let Err(e) = self.change_notifier.send(()) {
+            tracing::debug!(%e, "Error notifying subscribers to changed feature configuration");
+        }
+
+        Ok(())
+    }
+
+    async fn handle_message_subscribe(
+        &mut self,
+        reply: OneshotSender<broadcast::Receiver<()>>,
+    ) -> Result<(), ConfigurationProxyError> {
+        reply
+            .send(self.change_notifier.subscribe())
             .map_err(|e| ConfigurationProxyError::Reply(format!("{:?}", e)))?;
 
         Ok(())

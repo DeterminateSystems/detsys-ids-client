@@ -46,13 +46,13 @@ struct EventProperties {
     groups: Map,
 
     #[serde(flatten)]
+    snapshot: crate::system_snapshot::SystemSnapshot,
+
+    #[serde(flatten)]
     facts: Map,
 
     #[serde(flatten)]
     featurefacts: FeatureFacts,
-
-    #[serde(flatten)]
-    snapshot: crate::system_snapshot::SystemSnapshot,
 
     #[serde(flatten)]
     properties: Option<Map>,

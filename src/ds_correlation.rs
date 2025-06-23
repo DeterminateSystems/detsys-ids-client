@@ -5,6 +5,8 @@ use serde::Deserialize;
 
 use crate::{DeviceId, DistinctId, Map};
 
+const IDENTITY_FILE: &str = "/var/lib/determinate/identity.json";
+
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 enum CorrelationInputs {
@@ -17,17 +19,40 @@ type Groups = HashMap<String, Option<String>>;
 impl Correlation {
     #[tracing::instrument]
     pub(crate) fn import() -> Correlation {
-        let Some(correlation) = std::env::var_os("DETSYS_CORRELATION") else {
-            return Correlation::default();
-        };
+        Self::import_from_env()
+            .or_else(Self::import_from_file)
+            .unwrap_or_default()
+    }
 
-        match serde_json::from_slice(correlation.as_bytes()) {
-            Ok(CorrelationInputs::DetSysTs(a)) => a.into_correlation(),
-            Ok(CorrelationInputs::Direct(a)) => a,
-            Err(e) => {
-                tracing::trace!(%e, "DETSYS_CORRELATION isn't parsable into a map");
-                Correlation::default()
-            }
+    #[tracing::instrument]
+    fn import_from_env() -> Option<Correlation> {
+        let correlation = serde_json::from_slice(
+            std::env::var_os("DETSYS_CORRELATION")?.as_bytes(),
+        )
+        .inspect_err(
+            |e| tracing::trace!(%e, %IDENTITY_FILE, "DETSYS_CORRELATION contained a malformed document"),
+        )
+        .ok()?;
+
+        match correlation {
+            CorrelationInputs::DetSysTs(a) => Some(a.into_correlation()),
+            CorrelationInputs::Direct(a) => Some(a),
+        }
+    }
+
+    #[tracing::instrument]
+    fn import_from_file() -> Option<Correlation> {
+        let content = std::fs::read_to_string(IDENTITY_FILE)
+            .inspect_err(|e| tracing::trace!(%e, %IDENTITY_FILE, "Error loading the identity file"))
+            .ok()?;
+
+        let  correlation = serde_json::from_slice(content.as_bytes())
+            .inspect_err(|e| tracing::trace!(%e, %IDENTITY_FILE, "Identity file contained a malformed document"))
+            .ok()?;
+
+        match correlation {
+            CorrelationInputs::DetSysTs(a) => Some(a.into_correlation()),
+            CorrelationInputs::Direct(a) => Some(a),
         }
     }
 
