@@ -52,8 +52,9 @@ impl Worker {
         let (to_collator, collator_rx) = channel(1000);
         let (to_submitter, submitter_rx) = channel(1000);
 
-        let recorder = Recorder::new(to_collator, to_configuration_proxy);
-        let configuration = ConfigurationProxy::new(transport.clone(), configuration_proxy_rx);
+        let recorder = Recorder::new(to_collator.clone(), to_configuration_proxy);
+        let configuration =
+            ConfigurationProxy::new(transport.clone(), configuration_proxy_rx, to_collator);
         let collator = Collator::new(
             system_snapshotter,
             storage,
