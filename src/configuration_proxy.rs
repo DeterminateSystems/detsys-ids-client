@@ -3,9 +3,11 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
+use crate::recorder::RawSignal;
 use crate::{
     checkin::{Checkin, Feature},
     collator::FeatureFacts,
@@ -26,49 +28,77 @@ pub(crate) enum ConfigurationProxySignal {
 pub(crate) enum ConfigurationProxyError {
     #[error("Replying with a collated message failed: {0}")]
     Reply(String),
+
+    #[error(transparent)]
+    CollatorSendError(#[from] mpsc::error::SendError<RawSignal>),
+
+    #[error(transparent)]
+    CollatorRecvError(#[from] tokio::sync::oneshot::error::RecvError),
 }
 
 pub(crate) struct ConfigurationProxy<T: crate::transport::Transport> {
     checkin: Option<Checkin>,
     transport: T,
     incoming: mpsc::Receiver<ConfigurationProxySignal>,
+    collator: mpsc::Sender<crate::recorder::RawSignal>,
     change_notifier: broadcast::Sender<()>,
 }
 
 impl<T: crate::transport::Transport> ConfigurationProxy<T> {
-    pub(crate) fn new(transport: T, incoming: mpsc::Receiver<ConfigurationProxySignal>) -> Self {
+    pub(crate) fn new(
+        transport: T,
+        incoming: mpsc::Receiver<ConfigurationProxySignal>,
+        collator: mpsc::Sender<crate::recorder::RawSignal>,
+    ) -> Self {
         Self {
             checkin: None,
             transport,
             incoming,
+            collator,
             change_notifier: broadcast::Sender::new(1),
         }
     }
 
     #[tracing::instrument(skip(self))]
     pub(crate) async fn execute(mut self) -> Result<(), ConfigurationProxyError> {
-        while let Some(signal) = self
-            .incoming
-            .recv()
-            .instrument(tracing::debug_span!("waiting for message"))
-            .await
-        {
-            match signal {
-                ConfigurationProxySignal::GetFeature(name, reply) => {
-                    self.handle_message_get_feature(name, reply).await?;
-                }
-                ConfigurationProxySignal::CheckInNow(session_properties, reply) => {
-                    self.handle_message_check_in_now(session_properties, reply)
-                        .await?;
-                }
-                ConfigurationProxySignal::Subscribe(reply) => {
-                    self.handle_message_subscribe(reply).await?;
-                }
-            }
-        }
+        let mut refresh_interval =
+            tokio::time::interval(std::time::Duration::from_secs(60 * 60 * 2));
+        refresh_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        refresh_interval.reset();
 
-        Ok(())
+        loop {
+            tokio::select! {
+                biased;
+                event = self.incoming.recv() => {
+                    let Some(event) = event else {
+                        tracing::debug!("Configuration proxy clients hung up, shutting down");
+
+                        return Ok(());
+                    };
+
+                    match event {
+                        ConfigurationProxySignal::GetFeature(name, reply) => {
+                            self.handle_message_get_feature(name, reply).await?;
+                        }
+                        ConfigurationProxySignal::CheckInNow(session_properties, reply) => {
+                            self.handle_message_check_in_now(session_properties, reply)
+                                .await?;
+                            refresh_interval.reset();
+                        }
+                        ConfigurationProxySignal::Subscribe(reply) => {
+                            self.handle_message_subscribe(reply).await?;
+                        }
+                    }
+                },
+                _ = refresh_interval.tick() => {
+                    self.check_in_now().await?;
+                },
+
+
+            };
+        }
     }
+
     async fn handle_message_get_feature(
         &self,
         name: String,
@@ -85,6 +115,33 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         reply
             .send(feat)
             .map_err(|e| ConfigurationProxyError::Reply(format!("{:?}", e)))?;
+
+        Ok(())
+    }
+
+    async fn check_in_now(&mut self) -> Result<(), ConfigurationProxyError> {
+        let session_properties = {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+
+            self.collator
+                .send(crate::recorder::RawSignal::GetSessionProperties { tx })
+                .instrument(tracing::trace_span!(
+                    "sending the GetSessionProperties message"
+                ))
+                .await
+                .inspect_err(|e| tracing::debug!(%e, "Failure requesting session properties"))?;
+
+            rx.instrument(tracing::trace_span!("waiting for reply"))
+                .await?
+        };
+
+        let (sender, receiver) = oneshot::channel();
+
+        self.handle_message_check_in_now(session_properties, sender)
+            .await?;
+
+        let reply = receiver.await?;
+        tracing::debug!(?reply, "Checked in after timeout");
 
         Ok(())
     }
