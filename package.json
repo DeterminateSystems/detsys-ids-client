@@ -1,0 +1,24 @@
+{
+  "name": "detsys-ids-client",
+  "version": "0.4.3",
+  "description": "A client for install.determinate.systems.",
+  "main": "index.node",
+  "scripts": {
+    "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
+    "install": "npm run build",
+    "test": "cargo test"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "cargo-cp-artifact": "^0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeterminateSystems/detsys-ids-client.git"
+  },
+  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/DeterminateSystems/detsys-ids-client/issues"
+  },
+  "homepage": "https://github.com/DeterminateSystems/detsys-ids-client#readme"
+}

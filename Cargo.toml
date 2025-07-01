@@ -4,12 +4,14 @@ version = "0.4.3"
 edition = "2024"
 license = "Apache-2.0"
 description = "A client for install.determinate.systems."
+exclude = ["index.node"]
 
 [features]
-default = []
+default = ["nodejs"]
 
 # See: https://github.com/tokio-rs/tracing/issues/3207
 tracing-instrument = []
+nodejs = ["neon"]
 
 [lib]
 crate-type = ["lib", "cdylib"]
@@ -38,6 +40,7 @@ is_ci = "1.2.0"
 sys-locale = "0.3.2"
 iana-time-zone = "0.1.61"
 async-compression = { version = "0.4.18", features = ["zstd", "tokio"] }
+neon = { version = "1", features = [ "tokio" ], optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
