@@ -5,10 +5,10 @@ use reqwest::Certificate;
 use reqwest::Url;
 use tracing::Instrument;
 
+use crate::Map;
 use crate::checkin::Checkin;
 use crate::checkin::ServerOptions;
 use crate::submitter::Batch;
-use crate::Map;
 
 use super::Transport;
 

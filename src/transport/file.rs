@@ -5,8 +5,8 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::sync::Mutex;
 
-use crate::submitter::Batch;
 use crate::Map;
+use crate::submitter::Batch;
 
 use super::Transport;
 

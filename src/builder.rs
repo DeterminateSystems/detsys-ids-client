@@ -6,7 +6,7 @@ use url::Url;
 use crate::identity::AnonymousDistinctId;
 use crate::storage::Storage;
 use crate::transport::TransportsError;
-use crate::{system_snapshot::SystemSnapshotter, DeviceId, DistinctId, Map};
+use crate::{DeviceId, DistinctId, Map, system_snapshot::SystemSnapshotter};
 use crate::{Recorder, Worker};
 
 #[derive(Default)]

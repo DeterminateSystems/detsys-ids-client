@@ -3,10 +3,10 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
+use crate::Map;
 use crate::ds_correlation::Correlation;
 use crate::identity::{AnonymousDistinctId, DeviceId, DistinctId};
 use crate::recorder::RawSignal;
-use crate::Map;
 
 #[derive(serde::Serialize, Debug)]
 pub(crate) enum CollatedSignal {

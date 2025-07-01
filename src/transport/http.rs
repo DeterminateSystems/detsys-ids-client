@@ -1,7 +1,7 @@
 use reqwest::Certificate;
 use url::Url;
 
-use crate::{submitter::Batch, Map};
+use crate::{Map, submitter::Batch};
 
 use super::Transport;
 
