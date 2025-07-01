@@ -21,9 +21,9 @@ pub(crate) trait Transport: Send + Clone {
         session_properties: Map,
     ) -> impl Future<Output = Result<crate::checkin::Checkin, Self::Error>> + Send;
 
-    fn submit<'b>(
+    fn submit(
         &mut self,
-        batch: Batch<'b>,
+        batch: Batch<'_>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
@@ -118,7 +118,7 @@ impl Transport for Transports {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
-    async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
+    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
         match self {
             Self::None => Ok(()),
             Self::File(t) => Ok(t.submit(batch).await?),

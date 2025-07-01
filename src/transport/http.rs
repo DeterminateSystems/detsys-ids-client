@@ -41,7 +41,7 @@ impl Transport for ReqwestTransport {
     type Error = ReqwestTransportError;
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
-    async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
+    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
         let mut url = self.host.clone();
         url.set_path("/events/batch");
 

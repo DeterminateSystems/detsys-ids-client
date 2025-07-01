@@ -54,7 +54,7 @@ impl Transport for FileTransport {
     type Error = FileTransportError;
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all))]
-    async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
+    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
         let mut handle = self.output_handle.lock().await;
 
         handle
