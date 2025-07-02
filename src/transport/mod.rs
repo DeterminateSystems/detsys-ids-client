@@ -6,7 +6,7 @@ use reqwest::Certificate;
 use srv_http::SrvHttpTransport;
 use url::Url;
 
-use crate::{submitter::Batch, Map};
+use crate::{Map, submitter::Batch};
 
 mod file;
 mod http;
@@ -21,10 +21,7 @@ pub(crate) trait Transport: Send + Clone {
         session_properties: Map,
     ) -> impl Future<Output = Result<crate::checkin::Checkin, Self::Error>> + Send;
 
-    fn submit<'b>(
-        &mut self,
-        batch: Batch<'b>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn submit(&mut self, batch: Batch<'_>) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 pub(crate) fn default_transport_backend() -> (String, Url, Option<Vec<url::Host>>) {
@@ -118,7 +115,7 @@ impl Transport for Transports {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
-    async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
+    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
         match self {
             Self::None => Ok(()),
             Self::File(t) => Ok(t.submit(batch).await?),

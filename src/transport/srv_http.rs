@@ -5,10 +5,10 @@ use reqwest::Certificate;
 use reqwest::Url;
 use tracing::Instrument;
 
+use crate::Map;
 use crate::checkin::Checkin;
 use crate::checkin::ServerOptions;
 use crate::submitter::Batch;
-use crate::Map;
 
 use super::Transport;
 
@@ -73,7 +73,7 @@ impl Transport for SrvHttpTransport {
     type Error = SrvHttpTransportError;
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
-    async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
+    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
         let payload = serde_json::to_string(&batch)?;
         let reqwest = self.reqwest.clone();
         let server_opts = self.server_options.clone();

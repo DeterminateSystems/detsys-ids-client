@@ -9,9 +9,9 @@ use tracing::Instrument;
 
 use crate::recorder::RawSignal;
 use crate::{
+    Map,
     checkin::{Checkin, Feature},
     collator::FeatureFacts,
-    Map,
 };
 
 #[derive(Debug)]

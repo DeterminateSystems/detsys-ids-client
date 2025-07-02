@@ -5,8 +5,8 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::sync::Mutex;
 
-use crate::submitter::Batch;
 use crate::Map;
+use crate::submitter::Batch;
 
 use super::Transport;
 
@@ -54,7 +54,7 @@ impl Transport for FileTransport {
     type Error = FileTransportError;
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all))]
-    async fn submit<'b>(&mut self, batch: Batch<'b>) -> Result<(), Self::Error> {
+    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
         let mut handle = self.output_handle.lock().await;
 
         handle

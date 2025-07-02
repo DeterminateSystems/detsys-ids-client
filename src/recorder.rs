@@ -2,11 +2,11 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot::channel as oneshot;
 use tracing::Instrument;
 
+use crate::Map;
 use crate::checkin::Feature;
 use crate::collator::FeatureFacts;
 use crate::configuration_proxy::ConfigurationProxySignal;
 use crate::identity::DistinctId;
-use crate::Map;
 
 #[derive(Debug)]
 pub(crate) enum RawSignal {
