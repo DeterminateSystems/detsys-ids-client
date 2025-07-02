@@ -185,11 +185,15 @@ impl Recorder {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    pub async fn record(&self, event: &str, properties: Option<Map>) {
+    pub async fn record(
+        &self,
+        event: impl Into<String> + std::fmt::Debug,
+        properties: Option<Map>,
+    ) {
         if let Err(e) = self
             .outgoing
             .send(RawSignal::Event {
-                event_name: event.to_string(),
+                event_name: event.into(),
                 properties,
             })
             .instrument(tracing::trace_span!("recording the event"))
