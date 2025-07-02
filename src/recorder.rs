@@ -220,10 +220,10 @@ impl Recorder {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    pub async fn alias(&self, alias: String) {
+    pub async fn alias(&self, alias: impl Into<String> + std::fmt::Debug) {
         if let Err(e) = self
             .outgoing
-            .send(RawSignal::Alias(alias))
+            .send(RawSignal::Alias(alias.into()))
             .instrument(tracing::trace_span!("sending the Alias message"))
             .await
         {
