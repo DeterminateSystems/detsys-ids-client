@@ -167,11 +167,15 @@ impl Recorder {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    pub async fn add_fact(&self, key: &str, value: serde_json::Value) {
+    pub async fn set_fact(
+        &self,
+        key: impl Into<String> + std::fmt::Debug,
+        value: serde_json::Value,
+    ) {
         if let Err(e) = self
             .outgoing
             .send(RawSignal::Fact {
-                key: key.to_string(),
+                key: key.into(),
                 value,
             })
             .await
@@ -181,11 +185,15 @@ impl Recorder {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    pub async fn record(&self, event: &str, properties: Option<Map>) {
+    pub async fn record(
+        &self,
+        event: impl Into<String> + std::fmt::Debug,
+        properties: Option<Map>,
+    ) {
         if let Err(e) = self
             .outgoing
             .send(RawSignal::Event {
-                event_name: event.to_string(),
+                event_name: event.into(),
                 properties,
             })
             .instrument(tracing::trace_span!("recording the event"))
@@ -212,10 +220,10 @@ impl Recorder {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    pub async fn alias(&self, alias: String) {
+    pub async fn alias(&self, alias: impl Into<String> + std::fmt::Debug) {
         if let Err(e) = self
             .outgoing
-            .send(RawSignal::Alias(alias))
+            .send(RawSignal::Alias(alias.into()))
             .instrument(tracing::trace_span!("sending the Alias message"))
             .await
         {

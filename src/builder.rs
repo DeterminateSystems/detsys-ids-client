@@ -9,7 +9,7 @@ use crate::transport::TransportsError;
 use crate::{DeviceId, DistinctId, Map, system_snapshot::SystemSnapshotter};
 use crate::{Recorder, Worker};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Builder {
     device_id: Option<DeviceId>,
     distinct_id: Option<DistinctId>,
@@ -39,46 +39,84 @@ impl Builder {
         }
     }
 
-    pub fn set_anonymous_distinct_id(
+    pub fn anonymous_distinct_id(
         mut self,
         anonymous_distinct_id: Option<AnonymousDistinctId>,
     ) -> Self {
+        self.set_anonymous_distinct_id(anonymous_distinct_id);
+        self
+    }
+
+    pub fn set_anonymous_distinct_id(
+        &mut self,
+        anonymous_distinct_id: Option<AnonymousDistinctId>,
+    ) -> &mut Self {
         self.anonymous_distinct_id = anonymous_distinct_id;
         self
     }
 
-    pub fn set_distinct_id(mut self, distinct_id: Option<DistinctId>) -> Self {
+    pub fn distinct_id(mut self, distinct_id: Option<DistinctId>) -> Self {
+        self.set_distinct_id(distinct_id);
+        self
+    }
+
+    pub fn set_distinct_id(&mut self, distinct_id: Option<DistinctId>) -> &mut Self {
         self.distinct_id = distinct_id;
         self
     }
 
-    pub fn set_device_id(mut self, device_id: Option<DeviceId>) -> Self {
+    pub fn device_id(mut self, device_id: Option<DeviceId>) -> Self {
+        self.set_device_id(device_id);
+        self
+    }
+
+    pub fn set_device_id(&mut self, device_id: Option<DeviceId>) -> &mut Self {
         self.device_id = device_id;
         self
     }
 
-    pub fn set_facts(mut self, facts: Option<Map>) -> Self {
+    pub fn facts(mut self, facts: Option<Map>) -> Self {
+        self.set_facts(facts);
+        self
+    }
+
+    pub fn set_facts(&mut self, facts: Option<Map>) -> &mut Self {
         self.facts = facts;
         self
     }
 
-    pub fn set_groups(mut self, groups: Option<Map>) -> Self {
+    pub fn groups(mut self, groups: Option<Map>) -> Self {
+        self.set_groups(groups);
+        self
+    }
+
+    pub fn set_groups(&mut self, groups: Option<Map>) -> &mut Self {
         self.groups = groups;
         self
     }
 
-    pub fn add_fact(
-        mut self,
-        key: impl Into<String> + std::fmt::Debug,
+    pub fn fact(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+        self.set_fact(key, value);
+        self
+    }
+
+    pub fn set_fact(
+        &mut self,
+        key: impl Into<String>,
         value: impl Into<serde_json::Value>,
-    ) -> Self {
+    ) -> &mut Self {
         self.facts
             .get_or_insert_with(Default::default)
             .insert(key.into(), value.into());
         self
     }
 
-    pub fn set_endpoint(mut self, endpoint: Option<String>) -> Self {
+    pub fn endpoint(mut self, endpoint: Option<String>) -> Self {
+        self.set_endpoint(endpoint);
+        self
+    }
+
+    pub fn set_endpoint(&mut self, endpoint: Option<String>) -> &mut Self {
         self.endpoint = endpoint;
         self
     }
@@ -104,22 +142,42 @@ impl Builder {
     ///   .await;
     /// # })
     /// ```
-    pub fn set_enable_reporting(mut self, enable_reporting: bool) -> Self {
+    pub fn enable_reporting(mut self, enable_reporting: bool) -> Self {
+        self.set_enable_reporting(enable_reporting);
+        self
+    }
+
+    pub fn set_enable_reporting(&mut self, enable_reporting: bool) -> &mut Self {
         self.enable_reporting = enable_reporting;
         self
     }
 
-    pub fn set_timeout(mut self, duration: Option<Duration>) -> Self {
+    pub fn timeout(mut self, duration: Option<Duration>) -> Self {
+        self.set_timeout(duration);
+        self
+    }
+
+    pub fn set_timeout(&mut self, duration: Option<Duration>) -> &mut Self {
         self.timeout = duration;
         self
     }
 
-    pub fn set_certificate(mut self, certificate: Option<Certificate>) -> Self {
+    pub fn certificate(mut self, certificate: Option<Certificate>) -> Self {
+        self.set_certificate(certificate);
+        self
+    }
+
+    pub fn set_certificate(&mut self, certificate: Option<Certificate>) -> &mut Self {
         self.certificate = certificate;
         self
     }
 
-    pub fn set_proxy(mut self, proxy: Option<Url>) -> Self {
+    pub fn proxy(mut self, proxy: Option<Url>) -> Self {
+        self.set_proxy(proxy);
+        self
+    }
+
+    pub fn set_proxy(&mut self, proxy: Option<Url>) -> &mut Self {
         self.proxy = proxy;
         self
     }
