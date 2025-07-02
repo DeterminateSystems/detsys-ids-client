@@ -95,18 +95,14 @@ impl Builder {
         self
     }
 
-    pub fn fact(
-        mut self,
-        key: impl Into<String> + std::fmt::Debug,
-        value: impl Into<serde_json::Value>,
-    ) -> Self {
+    pub fn fact(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
         self.set_fact(key, value);
         self
     }
 
     pub fn set_fact(
         &mut self,
-        key: impl Into<String> + std::fmt::Debug,
+        key: impl Into<String>,
         value: impl Into<serde_json::Value>,
     ) -> &mut Self {
         self.facts
