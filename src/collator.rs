@@ -18,9 +18,6 @@ pub(crate) enum CollatedSignal {
 pub(crate) struct Event {
     name: String,
 
-    #[serde(rename = "$anon_distinct_id")]
-    anon_distinct_id: String,
-
     distinct_id: String,
     uuid: uuid::Uuid,
     timestamp: String,
@@ -30,6 +27,9 @@ pub(crate) struct Event {
 
 #[derive(serde::Serialize, Debug)]
 struct EventProperties {
+    #[serde(rename = "$anon_distinct_id")]
+    anon_distinct_id: String,
+
     #[serde(rename = "$device_id")]
     device_id: String,
 
@@ -209,11 +209,11 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         properties: Option<Map>,
     ) -> Event {
         Event {
-            anon_distinct_id: self.anon_distinct_id.to_string(),
             distinct_id: self.distinct_id(),
             name: event,
 
             properties: EventProperties {
+                anon_distinct_id: self.anon_distinct_id.to_string(),
                 session_id: self.session_id.to_string(),
                 device_id: self.device_id.to_string(),
                 snapshot,
