@@ -13,6 +13,9 @@ pub mod system_snapshot;
 pub mod transport;
 mod worker;
 
+#[cfg(feature = "nodejs")]
+mod nodejs;
+
 pub use builder::Builder;
 pub use identity::{AnonymousDistinctId, DeviceId, DistinctId};
 pub use recorder::Recorder;
@@ -28,4 +31,9 @@ macro_rules! builder {
             .add_fact("$app_version", env!("CARGO_PKG_VERSION"))
             .add_fact("$app_name", env!("CARGO_CRATE_NAME"))
     }};
+}
+
+#[cfg_attr(feature = "nodejs", neon::main)]
+fn neon_hook(cx: neon::prelude::ModuleContext) -> neon::result::NeonResult<()> {
+    crate::nodejs::neon_hook(cx)
 }
