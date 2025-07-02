@@ -76,6 +76,7 @@
               check.check-editorconfig
               check.check-clippy
               libiconv
+              nodePackages.npm
             ];
           };
         });
