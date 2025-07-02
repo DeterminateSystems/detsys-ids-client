@@ -167,11 +167,15 @@ impl Recorder {
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    pub async fn add_fact(&self, key: &str, value: serde_json::Value) {
+    pub async fn set_fact(
+        &self,
+        key: impl Into<String> + std::fmt::Debug,
+        value: serde_json::Value,
+    ) {
         if let Err(e) = self
             .outgoing
             .send(RawSignal::Fact {
-                key: key.to_string(),
+                key: key.into(),
                 value,
             })
             .await
