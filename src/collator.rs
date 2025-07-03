@@ -382,6 +382,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
     async fn handle_message_reset(&mut self) -> Result<(), SnapshotError> {
         self.distinct_id = None;
         self.anon_distinct_id = AnonymousDistinctId::new();
+        self.groups = Groups::new();
 
         if let Err(e) = self
             .storage
