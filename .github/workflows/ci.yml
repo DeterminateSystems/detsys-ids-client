@@ -45,6 +45,9 @@ jobs:
       - name: Check Clippy
         if: always()
         run: nix develop --command check-clippy
+      - name: Run tests
+        if: always()
+        run: nix develop --command cargo test
 
   DeterminateCI:
     needs:
