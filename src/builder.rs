@@ -7,7 +7,7 @@ use crate::identity::AnonymousDistinctId;
 use crate::storage::Storage;
 use crate::transport::TransportsError;
 use crate::{DeviceId, DistinctId, Map, system_snapshot::SystemSnapshotter};
-use crate::{Recorder, Worker};
+use crate::{Groups, Recorder, Worker};
 
 #[derive(Default, Clone)]
 pub struct Builder {
@@ -17,7 +17,7 @@ pub struct Builder {
     enable_reporting: bool,
     endpoint: Option<String>,
     facts: Option<Map>,
-    groups: Option<Map>,
+    groups: Option<Groups>,
     proxy: Option<Url>,
     certificate: Option<Certificate>,
     timeout: Option<Duration>,
@@ -85,12 +85,12 @@ impl Builder {
         self
     }
 
-    pub fn groups(mut self, groups: Option<Map>) -> Self {
+    pub fn groups(mut self, groups: Option<Groups>) -> Self {
         self.set_groups(groups);
         self
     }
 
-    pub fn set_groups(&mut self, groups: Option<Map>) -> &mut Self {
+    pub fn set_groups(&mut self, groups: Option<Groups>) -> &mut Self {
         self.groups = groups;
         self
     }

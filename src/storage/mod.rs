@@ -1,14 +1,17 @@
 mod generic;
+
 pub use generic::Generic;
 
 use crate::identity::AnonymousDistinctId;
-use crate::{DeviceId, DistinctId};
+use crate::{DeviceId, DistinctId, Groups};
 
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StoredProperties {
     pub anonymous_distinct_id: AnonymousDistinctId,
     pub distinct_id: Option<DistinctId>,
     pub device_id: DeviceId,
+    #[serde(default)]
+    pub groups: Groups,
 }
 
 pub trait Storage: Send + Sync + 'static {

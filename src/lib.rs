@@ -13,12 +13,15 @@ pub mod system_snapshot;
 pub mod transport;
 mod worker;
 
+use std::collections::HashMap;
+
 pub use builder::Builder;
 pub use identity::{AnonymousDistinctId, DeviceId, DistinctId};
 pub use recorder::Recorder;
 pub use worker::Worker;
 
 pub type Map = serde_json::Map<String, serde_json::Value>;
+pub type Groups = HashMap<String, String>;
 
 #[macro_export]
 macro_rules! builder {

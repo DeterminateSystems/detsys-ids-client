@@ -3,10 +3,10 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
-use crate::Map;
 use crate::ds_correlation::Correlation;
 use crate::identity::{AnonymousDistinctId, DeviceId, DistinctId};
 use crate::recorder::RawSignal;
+use crate::{Groups, Map};
 
 #[derive(serde::Serialize, Debug)]
 pub(crate) enum CollatedSignal {
@@ -43,7 +43,7 @@ struct EventProperties {
     session_id: String,
 
     #[serde(rename = "$groups")]
-    groups: Map,
+    groups: Groups,
 
     #[serde(flatten)]
     snapshot: crate::system_snapshot::SystemSnapshot,
@@ -82,7 +82,7 @@ pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter, P: crat
     device_id: DeviceId,
     facts: Map,
     featurefacts: FeatureFacts,
-    groups: Map,
+    groups: Groups,
 }
 impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> Collator<F, P> {
     #[allow(clippy::too_many_arguments)]
@@ -95,11 +95,11 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         distinct_id: Option<DistinctId>,
         device_id: Option<DeviceId>,
         mut facts: Map,
-        mut groups: Map,
+        mut groups: Groups,
         mut correlation_data: Correlation,
     ) -> Self {
         facts.append(&mut correlation_data.properties);
-        groups.append(&mut correlation_data.groups_as_map());
+        groups.extend(correlation_data.groups_as_hashmap());
 
         let stored_ident = storage.load().await.ok().flatten();
 
@@ -311,6 +311,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 distinct_id: self.distinct_id.clone(),
                 anonymous_distinct_id: self.anon_distinct_id.clone(),
                 device_id: self.device_id.clone(),
+                groups: self.groups.clone(),
             })
             .await
         {
@@ -337,7 +338,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         group_name: String,
         group_member_id: String,
     ) -> Result<(), SnapshotError> {
-        self.groups.insert(group_name, group_member_id.into());
+        self.groups.insert(group_name, group_member_id);
 
         if let Err(e) = self
             .storage
@@ -345,7 +346,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 distinct_id: self.distinct_id.clone(),
                 anonymous_distinct_id: self.anon_distinct_id.clone(),
                 device_id: self.device_id.clone(),
-                // groups: self.groups.clone(),
+                groups: self.groups.clone(),
             })
             .await
         {
@@ -386,6 +387,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 distinct_id: self.distinct_id.clone(),
                 anonymous_distinct_id: self.anon_distinct_id.clone(),
                 device_id: self.device_id.clone(),
+                groups: self.groups.clone(),
             })
             .await
         {

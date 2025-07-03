@@ -10,7 +10,7 @@ use crate::storage::Storage;
 use crate::submitter::Submitter;
 use crate::system_snapshot::SystemSnapshotter;
 use crate::transport::Transport;
-use crate::{DeviceId, DistinctId, Map, Recorder};
+use crate::{DeviceId, DistinctId, Groups, Map, Recorder};
 
 pub struct Worker {
     collator_task: JoinHandle<Result<(), SnapshotError>>,
@@ -38,7 +38,7 @@ impl Worker {
         distinct_id: Option<DistinctId>,
         device_id: Option<DeviceId>,
         facts: Option<Map>,
-        groups: Option<Map>,
+        groups: Option<Groups>,
         system_snapshotter: F,
         storage: P,
         transport: T,
