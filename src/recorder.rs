@@ -24,6 +24,10 @@ pub(crate) enum RawSignal {
     },
     FlushNow,
     Identify(DistinctId),
+    AddGroup {
+        group_name: String,
+        group_member_id: String,
+    },
     Alias(String),
     Reset,
 }
@@ -212,6 +216,29 @@ impl Recorder {
             .await
         {
             tracing::error!(error = ?e, "Failed to enqueue swap_identity message");
+        }
+
+        self.trigger_configuration_refresh()
+            .instrument(tracing::trace_span!("triggering a configuration refresh"))
+            .await;
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    pub async fn add_group(
+        &self,
+        group_name: impl Into<String> + std::fmt::Debug,
+        group_member_id: impl Into<String> + std::fmt::Debug,
+    ) {
+        if let Err(e) = self
+            .outgoing
+            .send(RawSignal::AddGroup {
+                group_name: group_name.into(),
+                group_member_id: group_member_id.into(),
+            })
+            .instrument(tracing::trace_span!("sending the AddGroup message"))
+            .await
+        {
+            tracing::error!(error = ?e, "Failed to enqueue AddGroup message");
         }
 
         self.trigger_configuration_refresh()

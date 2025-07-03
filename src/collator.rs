@@ -177,6 +177,13 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 RawSignal::Identify(new) => {
                     self.handle_message_identify(new).await?;
                 }
+                RawSignal::AddGroup {
+                    group_name,
+                    group_member_id,
+                } => {
+                    self.handle_message_add_group(group_name, group_member_id)
+                        .await?;
+                }
                 RawSignal::Alias(alias) => {
                     self.handle_message_alias(alias).await?;
                 }
@@ -320,6 +327,30 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             )))
             .await
             .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    async fn handle_message_add_group(
+        &mut self,
+        group_name: String,
+        group_member_id: String,
+    ) -> Result<(), SnapshotError> {
+        self.groups.insert(group_name, group_member_id.into());
+
+        if let Err(e) = self
+            .storage
+            .store(crate::storage::StoredProperties {
+                distinct_id: self.distinct_id.clone(),
+                anonymous_distinct_id: self.anon_distinct_id.clone(),
+                device_id: self.device_id.clone(),
+                // groups: self.groups.clone(),
+            })
+            .await
+        {
+            tracing::debug!(%e, "Storage error");
+        }
 
         Ok(())
     }
