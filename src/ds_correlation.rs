@@ -14,7 +14,7 @@ enum CorrelationInputs {
     Direct(Correlation),
 }
 
-type Groups = HashMap<String, Option<String>>;
+type OptionalGroups = HashMap<String, Option<String>>;
 
 impl Correlation {
     #[tracing::instrument]
@@ -56,11 +56,11 @@ impl Correlation {
         }
     }
 
-    pub(crate) fn groups_as_map(&self) -> Map {
+    pub(crate) fn groups_as_hashmap(&self) -> crate::Groups {
         self.groups
             .clone()
             .into_iter()
-            .filter_map(|(k, v)| Some((k, v?.into())))
+            .filter_map(|(k, v)| Some((k, v?)))
             .collect()
     }
 }
@@ -82,7 +82,7 @@ pub(crate) struct Correlation {
     pub(crate) device_id: Option<DeviceId>,
 
     #[serde(rename = "$groups", default)]
-    pub(crate) groups: Groups,
+    pub(crate) groups: OptionalGroups,
 
     #[serde(flatten, default)]
     pub(crate) properties: Map,
@@ -103,7 +103,7 @@ struct DetsysTsGitHubAction {
     workflow: Option<String>,
 
     #[serde(default)]
-    groups: Groups,
+    groups: OptionalGroups,
 
     #[serde(flatten, default)]
     extra_properties: Correlation,
@@ -119,7 +119,7 @@ impl DetsysTsGitHubAction {
             // in case there are duplicates but one side has Some and the other has None.
             // So we filter out the Nones, then make them Options again.
             .filter_map(|(k, v)| Some((k, Some(v?))))
-            .collect::<Groups>();
+            .collect::<OptionalGroups>();
 
         Correlation {
             distinct_id: self
