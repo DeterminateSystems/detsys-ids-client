@@ -7,7 +7,7 @@ use crate::{DeviceId, DistinctId, Map};
 
 const IDENTITY_FILE: &str = "/var/lib/determinate/identity.json";
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 enum CorrelationInputs {
     DetSysTs(DetsysTsGitHubAction),
@@ -65,7 +65,7 @@ impl Correlation {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Correlation {
     pub(crate) distinct_id: Option<DistinctId>,
 
@@ -88,10 +88,10 @@ pub(crate) struct Correlation {
     pub(crate) properties: Map,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 struct DetsysTsGitHubAction {
     // approximately the distinct_id / user identifier
-    repository: Option<String>,
+    repository: String,
 
     // approximately $session_id
     run: Option<String>,
@@ -125,7 +125,7 @@ impl DetsysTsGitHubAction {
             distinct_id: self
                 .extra_properties
                 .distinct_id
-                .or_else(|| self.repository.clone().map(DistinctId::from)),
+                .or_else(|| Some(DistinctId::from(self.repository))),
             anon_distinct_id: self.extra_properties.anon_distinct_id,
             session_id: self
                 .extra_properties
@@ -142,5 +142,131 @@ impl DetsysTsGitHubAction {
             groups,
             properties: self.extra_properties.properties,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ds_correlation::{Correlation, CorrelationInputs, DetsysTsGitHubAction};
+
+    // In https://github.com/DeterminateSystems/detsys-ts/pull/104 we stopped doing the wacky transformations.
+    // In that PR, we also changed the structure of the correlation we write to the identity.json to be more straightforward.
+    // This test makes sure the old style parses correctly as the old style
+    #[test]
+    fn test_parse_detsysts_pre_104() {
+        let c: CorrelationInputs = serde_json::from_value(serde_json::json!({
+            "correlation_source": "github-actions",
+            "repository": "GHR-xxx",
+            "workflow": "GHW-xxx",
+            "job": "GHWJ-xxx",
+            "run": "GHWJR-xxx",
+            "run_differentiator": "GHWJA-xxx",
+            "groups": {
+                "ci": "github-actions",
+                "project": "nix-installer",
+                "github_organization": "GHO-xxx"
+            },
+            "is_ci": true
+        }))
+        .unwrap();
+        assert_eq!(
+            c,
+            CorrelationInputs::DetSysTs(DetsysTsGitHubAction {
+                repository: "GHR-xxx".into(),
+                run: Some("GHWJR-xxx".into()),
+                run_differentiator: Some("GHWJA-xxx".into()),
+                workflow: Some("GHW-xxx".into()),
+                groups: std::collections::HashMap::from_iter(
+                    [
+                        (
+                            "github_organization".to_string(),
+                            Some("GHO-xxx".to_string())
+                        ),
+                        ("project".to_string(), Some("nix-installer".to_string())),
+                        ("ci".to_string(), Some("github-actions".to_string())),
+                    ]
+                    .into_iter()
+                ),
+                extra_properties: Correlation {
+                    distinct_id: None,
+                    anon_distinct_id: None,
+                    session_id: None,
+                    window_id: None,
+                    device_id: None,
+                    groups: std::collections::HashMap::new(),
+                    properties: super::Map::from_iter(
+                        [
+                            (
+                                "correlation_source".to_string(),
+                                serde_json::Value::from("github-actions")
+                            ),
+                            ("is_ci".to_string(), serde_json::Value::from(true)),
+                            ("job".to_string(), serde_json::Value::from("GHWJ-xxx"))
+                        ]
+                        .into_iter()
+                    ),
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_detsysts_post_104() {
+        let c: CorrelationInputs = serde_json::from_value(serde_json::json!({
+            "$anon_distinct_id": "github_xxx",
+            "correlation_source": "github-actions",
+            "github_repository_hash": "GHR-xxx",
+            "github_workflow_hash": "GHW-xxx",
+            "github_workflow_job_hash": "GHWJ-xxx",
+            "github_workflow_run_hash": "GHWJR-xxx",
+            "github_workflow_run_differentiator_hash": "GHWJA-xxx",
+            "$session_id": "GHWJA-xxx",
+            "$groups": {
+                "github_repository": "GHR-xxx",
+                "github_organization": "GHO-xxx"
+            },
+            "is_ci": true
+        }))
+        .unwrap();
+        assert_eq!(
+            c,
+            CorrelationInputs::Direct(Correlation {
+                anon_distinct_id: Some("github_xxx".into()),
+
+                distinct_id: None,
+                session_id: Some("GHWJA-xxx".into()),
+                window_id: None,
+                device_id: None,
+
+                groups: std::collections::HashMap::from_iter(
+                    [
+                        (
+                            "github_organization".to_string(),
+                            Some("GHO-xxx".to_string())
+                        ),
+                        ("github_repository".to_string(), Some("GHR-xxx".to_string())),
+                    ]
+                    .into_iter()
+                ),
+                properties: super::Map::from_iter(
+                    [
+                        (
+                            "correlation_source".to_string(),
+                            serde_json::Value::from("github-actions")
+                        ),
+                        ("is_ci".to_string(), serde_json::Value::from(true)),
+                        ("github_workflow_run_hash".to_string(), "GHWJR-xxx".into()),
+                        (
+                            "github_workflow_run_differentiator_hash".to_string(),
+                            "GHWJA-xxx".into()
+                        ),
+                        ("github_workflow_hash".to_string(), "GHW-xxx".into()),
+                        ("github_repository_hash".to_string(), "GHR-xxx".into()),
+                        ("github_workflow_job_hash".to_string(), "GHWJ-xxx".into())
+                    ]
+                    .into_iter()
+                ),
+            })
+        );
     }
 }
