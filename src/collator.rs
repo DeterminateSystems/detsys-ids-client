@@ -303,6 +303,8 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         if old.is_some() {
             // Reset our anon distinct ID so we don't link the old id to the new id
             self.anon_distinct_id = AnonymousDistinctId::from(uuid::Uuid::now_v7().to_string());
+            // Reset our groups since they probably don't carry over
+            self.groups = Groups::new();
         }
 
         if let Err(e) = self
