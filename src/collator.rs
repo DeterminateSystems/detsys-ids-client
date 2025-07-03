@@ -103,7 +103,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
 
         let stored_ident = storage.load().await.ok().flatten();
 
-        Self {
+        let mut ret = Self {
             system_snapshotter,
             storage,
             incoming,
@@ -131,13 +131,19 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 })
                 .or(correlation_data.distinct_id),
             device_id: device_id
-                .or_else(|| stored_ident.map(|props| props.device_id))
+                .or_else(|| stored_ident.as_ref().map(|props| props.device_id.clone()))
                 .or(correlation_data.device_id)
                 .unwrap_or_default(),
             facts,
             featurefacts: FeatureFacts::default(),
             groups,
+        };
+
+        if stored_ident != Some(ret.properties_to_store()) {
+            ret.persist_storage().await;
         }
+
+        ret
     }
 }
 
@@ -240,6 +246,22 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         }
     }
 
+    fn properties_to_store(&self) -> crate::storage::StoredProperties {
+        crate::storage::StoredProperties {
+            distinct_id: self.distinct_id.clone(),
+            anonymous_distinct_id: self.anon_distinct_id.clone(),
+            device_id: self.device_id.clone(),
+            groups: self.groups.clone(),
+        }
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all))]
+    async fn persist_storage(&mut self) {
+        if let Err(e) = self.storage.store(self.properties_to_store()).await {
+            tracing::debug!(%e, "Storage error");
+        }
+    }
+
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
     async fn handle_message_get_session_properties(
         &self,
@@ -307,18 +329,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             self.groups = Groups::new();
         }
 
-        if let Err(e) = self
-            .storage
-            .store(crate::storage::StoredProperties {
-                distinct_id: self.distinct_id.clone(),
-                anonymous_distinct_id: self.anon_distinct_id.clone(),
-                device_id: self.device_id.clone(),
-                groups: self.groups.clone(),
-            })
-            .await
-        {
-            tracing::debug!(%e, "Storage error");
-        }
+        self.persist_storage().await;
 
         let snapshot = self.system_snapshotter.snapshot().await;
 
@@ -342,18 +353,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
     ) -> Result<(), SnapshotError> {
         self.groups.insert(group_name, group_member_id);
 
-        if let Err(e) = self
-            .storage
-            .store(crate::storage::StoredProperties {
-                distinct_id: self.distinct_id.clone(),
-                anonymous_distinct_id: self.anon_distinct_id.clone(),
-                device_id: self.device_id.clone(),
-                groups: self.groups.clone(),
-            })
-            .await
-        {
-            tracing::debug!(%e, "Storage error");
-        }
+        self.persist_storage().await;
 
         Ok(())
     }
@@ -384,18 +384,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         self.anon_distinct_id = AnonymousDistinctId::new();
         self.groups = Groups::new();
 
-        if let Err(e) = self
-            .storage
-            .store(crate::storage::StoredProperties {
-                distinct_id: self.distinct_id.clone(),
-                anonymous_distinct_id: self.anon_distinct_id.clone(),
-                device_id: self.device_id.clone(),
-                groups: self.groups.clone(),
-            })
-            .await
-        {
-            tracing::debug!(%e, "Storage error");
-        }
+        self.persist_storage().await;
 
         Ok(())
     }
