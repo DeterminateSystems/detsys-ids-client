@@ -24,8 +24,8 @@ pub type Map = serde_json::Map<String, serde_json::Value>;
 macro_rules! builder {
     () => {{
         detsys_ids_client::Builder::new()
-            .add_fact("cargo_pkg_name", env!("CARGO_PKG_NAME"))
-            .add_fact("$app_version", env!("CARGO_PKG_VERSION"))
-            .add_fact("$app_name", env!("CARGO_CRATE_NAME"))
+            .fact("cargo_pkg_name", env!("CARGO_PKG_NAME"))
+            .fact("$app_version", env!("CARGO_PKG_VERSION"))
+            .fact("$app_name", env!("CARGO_CRATE_NAME"))
     }};
 }
