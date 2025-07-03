@@ -137,7 +137,7 @@ impl Builder {
     /// let cli = Cli { no_telemetry: false, };
     ///
     /// let (recorder, worker) = builder!()
-    ///   .set_enable_reporting(!cli.no_telemetry)
+    ///   .enable_reporting(!cli.no_telemetry)
     ///   .build_or_default()
     ///   .await;
     /// # })
