@@ -49,9 +49,11 @@ Components:
 
 ### Environment Variables
 
+- `DETSYS_CORRELATION` -- A JSON blob that is set by `detsys-ts` and passes down some anonymized context about the GitHub Actions run. It can also contain an arbitrary set of event properties.
 - `DETSYS_IDS_CHECKIN_FILE` -- When using the File transport, this environment variable can point to a Checkin-compatible JSON file to specify features and options.
 - `DETSYS_IDS_IN_CI` -- Set to `1` to explicitly indicate this run is in CI.
-- `DETSYS_CORRELATION` -- A JSON blob that is set by `detsys-ts` and passes down some anonymized context about the GitHub Actions run. It can also contain an arbitrary set of event properties.
+- `DETSYS_IDS_TELEMETRY` -- set to `disabled` to turn off telemetry.
+- `DETSYS_IDS_TRANSPORT` -- Defaults to using the SrvHttp method, but set to `file:///....` to write IDS event data to a file.
 
 The correlation data is mixed in to the event data by the Collator, and:
 
