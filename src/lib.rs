@@ -45,10 +45,11 @@ pub fn is_telemetry_enabled() -> bool {
         eprintln!(
             "{}",
             [
-                "[NOTE] Determinate's telemetry is disabled, which makes it harder to build great software.",
+                "[NOTE] Telemetry is disabled, which makes it harder to build great software.",
                 "We don't collect much, so please turn it back on:",
                 "https://dtr.mn/telemetry",
-            ].join(" ")
+            ]
+            .join(" ")
         );
     }
 
