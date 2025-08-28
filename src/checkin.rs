@@ -6,14 +6,14 @@ use crate::{Map, collator::FeatureFacts};
 
 pub(crate) type CoherentFeatureFlags = HashMap<String, Arc<Feature<serde_json::Value>>>;
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default, PartialEq, Eq)]
 pub struct Checkin {
     #[serde(default)]
     pub(crate) server_options: ServerOptions,
     pub(crate) options: CoherentFeatureFlags,
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default, PartialEq, Eq)]
 pub(crate) struct ServerOptions {
     pub(crate) compression_algorithms: crate::compression_set::CompressionSet,
 }
@@ -38,7 +38,7 @@ impl Checkin {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Feature<T: serde::de::DeserializeOwned> {
     pub variant: serde_json::Value,
     #[serde(
