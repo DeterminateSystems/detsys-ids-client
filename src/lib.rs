@@ -22,6 +22,7 @@ pub use worker::Worker;
 
 pub type Map = serde_json::Map<String, serde_json::Value>;
 pub type Groups = HashMap<String, String>;
+pub type PersonProperties = Map;
 
 #[macro_export]
 macro_rules! builder {
