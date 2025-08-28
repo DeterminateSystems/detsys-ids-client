@@ -3,6 +3,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
+use crate::checkin::Checkin;
 use crate::ds_correlation::Correlation;
 use crate::identity::{AnonymousDistinctId, DeviceId, DistinctId};
 use crate::recorder::{IdentifyProperties, RawSignal};
@@ -82,6 +83,7 @@ pub(crate) struct Collator<F: crate::system_snapshot::SystemSnapshotter, P: crat
     device_id: DeviceId,
     facts: Map,
     featurefacts: FeatureFacts,
+    checkin: Option<Checkin>,
     groups: Groups,
 }
 impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> Collator<F, P> {
@@ -135,10 +137,8 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 .or(correlation_data.device_id)
                 .unwrap_or_default(),
             facts,
-            featurefacts: stored_ident
-                .as_ref()
-                .map(|props| props.feature_facts.clone())
-                .unwrap_or_default(),
+            checkin: stored_ident.as_ref().map(|props| props.checkin.clone()),
+            featurefacts: FeatureFacts::default(),
             groups,
         };
 
@@ -159,6 +159,10 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         }
     }
 
+    pub(crate) fn get_checkin(&self) -> Option<&Checkin> {
+        self.checkin.as_ref()
+    }
+
     #[tracing::instrument(skip(self))]
     pub(crate) async fn execute(mut self) -> Result<(), SnapshotError> {
         while let Some(signal) = self
@@ -174,8 +178,9 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 RawSignal::Fact { key, value } => {
                     self.handle_message_fact(key, value);
                 }
-                RawSignal::UpdateFeatureFacts(featurefacts) => {
-                    self.handle_message_update_feature_facts(featurefacts).await;
+                RawSignal::UpdateFeatureConfiguration(checkin, featurefacts) => {
+                    self.handle_message_update_feature_configuration(checkin, featurefacts)
+                        .await;
                 }
                 RawSignal::Event {
                     event_name,
@@ -259,7 +264,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             anonymous_distinct_id: self.anon_distinct_id.clone(),
             device_id: self.device_id.clone(),
             groups: self.groups.clone(),
-            feature_facts: self.featurefacts.clone(),
+            checkin: self.checkin.as_ref().cloned().unwrap_or_default(),
         }
     }
 
@@ -305,7 +310,14 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    async fn handle_message_update_feature_facts(&mut self, facts: FeatureFacts) {
+    async fn handle_message_update_feature_configuration(
+        &mut self,
+        checkin: Option<Checkin>,
+        facts: FeatureFacts,
+    ) {
+        if let Some(checkin) = checkin {
+            self.checkin = Some(checkin);
+        }
         self.featurefacts = facts;
         self.persist_storage().await;
     }

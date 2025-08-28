@@ -1,14 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{Map, collator::FeatureFacts};
 
 pub(crate) type CoherentFeatureFlags = HashMap<String, Arc<Feature<serde_json::Value>>>;
 
-#[derive(Clone, Debug, Deserialize, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct Checkin {
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub(crate) server_options: ServerOptions,
     pub(crate) options: CoherentFeatureFlags,
 }
@@ -38,8 +38,8 @@ impl Checkin {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub struct Feature<T: serde::de::DeserializeOwned> {
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Feature<T: serde::ser::Serialize + serde::de::DeserializeOwned> {
     pub variant: serde_json::Value,
     #[serde(
         with = "crate::json_string",
