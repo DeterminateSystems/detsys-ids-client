@@ -2,6 +2,7 @@ mod generic;
 
 pub use generic::Generic;
 
+use crate::collator::FeatureFacts;
 use crate::identity::AnonymousDistinctId;
 use crate::{DeviceId, DistinctId, Groups};
 
@@ -12,6 +13,8 @@ pub struct StoredProperties {
     pub device_id: DeviceId,
     #[serde(default)]
     pub groups: Groups,
+    #[serde(default)]
+    pub feature_facts: FeatureFacts,
 }
 
 pub trait Storage: Send + Sync + 'static {

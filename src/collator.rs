@@ -135,7 +135,10 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 .or(correlation_data.device_id)
                 .unwrap_or_default(),
             facts,
-            featurefacts: FeatureFacts::default(),
+            featurefacts: stored_ident
+                .as_ref()
+                .map(|props| props.feature_facts.clone())
+                .unwrap_or_default(),
             groups,
         };
 
@@ -172,7 +175,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                     self.handle_message_fact(key, value);
                 }
                 RawSignal::UpdateFeatureFacts(featurefacts) => {
-                    self.handle_message_update_feature_facts(featurefacts);
+                    self.handle_message_update_feature_facts(featurefacts).await;
                 }
                 RawSignal::Event {
                     event_name,
@@ -256,6 +259,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             anonymous_distinct_id: self.anon_distinct_id.clone(),
             device_id: self.device_id.clone(),
             groups: self.groups.clone(),
+            feature_facts: self.featurefacts.clone(),
         }
     }
 
@@ -301,8 +305,9 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    fn handle_message_update_feature_facts(&mut self, facts: FeatureFacts) {
+    async fn handle_message_update_feature_facts(&mut self, facts: FeatureFacts) {
         self.featurefacts = facts;
+        self.persist_storage().await;
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
