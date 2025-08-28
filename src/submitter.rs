@@ -39,7 +39,7 @@ impl<T: crate::transport::Transport> Submitter<T> {
                 incoming_message = self.incoming.recv() => {
                     match incoming_message {
                         Some(CollatedSignal::Event(event)) => {
-                            self.events.push(event);
+                            self.events.push(*event);
                         }
                         Some(CollatedSignal::FlushNow) => {
                             self.try_flush().await;

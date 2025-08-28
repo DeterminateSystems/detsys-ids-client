@@ -10,7 +10,7 @@ use crate::{Groups, Map};
 
 #[derive(serde::Serialize, Debug)]
 pub(crate) enum CollatedSignal {
-    Event(Event),
+    Event(Box<Event>),
     FlushNow,
 }
 
@@ -220,8 +220,8 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         snapshot: crate::system_snapshot::SystemSnapshot,
         event: String,
         properties: Option<Map>,
-    ) -> Event {
-        Event {
+    ) -> Box<Event> {
+        Box::new(Event {
             distinct_id: self.distinct_id(),
             name: event,
 
@@ -243,7 +243,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 now.to_rfc3339()
             },
             uuid: uuid::Uuid::new_v4(),
-        }
+        })
     }
 
     fn properties_to_store(&self) -> crate::storage::StoredProperties {
