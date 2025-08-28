@@ -64,10 +64,20 @@ impl IdentifyProperties {
     }
 }
 
-#[derive(Clone)]
 pub struct Recorder {
     outgoing: Sender<RawSignal>,
+    auto_refresh_config: bool,
     to_configuration_proxy: Sender<ConfigurationProxySignal>,
+}
+
+impl Clone for Recorder {
+    fn clone(&self) -> Self {
+        Self {
+            outgoing: self.outgoing.clone(),
+            auto_refresh_config: true,
+            to_configuration_proxy: self.to_configuration_proxy.clone(),
+        }
+    }
 }
 
 impl std::fmt::Debug for Recorder {
@@ -85,7 +95,26 @@ impl Recorder {
         Self {
             outgoing: snapshotter_tx,
             to_configuration_proxy,
+            auto_refresh_config: true,
         }
+    }
+
+    // Execute a series of operations without triggering multiple configuration refreshes.
+    // Note: there are no atomic semantics, and configuration is refreshed at the end no matter what your function does.
+    pub async fn in_configuration_txn<F, T>(&self, f: F) -> T
+    where
+        F: AsyncFnOnce(&Recorder) -> T,
+    {
+        let mut rec = self.clone();
+
+        rec.auto_refresh_config = false;
+
+        let ret = f(self).await;
+
+        rec.auto_refresh_config = true;
+        rec.trigger_configuration_refresh().await;
+
+        ret
     }
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
@@ -360,6 +389,11 @@ impl Recorder {
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
     pub(crate) async fn trigger_configuration_refresh(&self) {
+        if !self.auto_refresh_config {
+            tracing::trace!("Not refreshing configuration because it is paused");
+            return;
+        }
+
         let (tx, rx) = oneshot();
 
         let session_properties = self
