@@ -24,6 +24,7 @@ pub(crate) enum RawSignal {
     },
     FlushNow,
     Identify(DistinctId, IdentifyProperties),
+    SetPersonProperties(IdentifyProperties),
     AddGroup {
         group_name: String,
         group_member_id: String,
@@ -253,6 +254,24 @@ impl Recorder {
             .await
         {
             tracing::error!(error = ?e, "Failed to enqueue swap_identity message");
+        }
+
+        self.trigger_configuration_refresh()
+            .instrument(tracing::trace_span!("triggering a configuration refresh"))
+            .await;
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    pub async fn set_person_properties(&self, properties: IdentifyProperties) {
+        if let Err(e) = self
+            .outgoing
+            .send(RawSignal::SetPersonProperties(properties))
+            .instrument(tracing::trace_span!(
+                "sending the SetPersonProperties message"
+            ))
+            .await
+        {
+            tracing::error!(error = ?e, "Failed to enqueue set_person_properties message");
         }
 
         self.trigger_configuration_refresh()

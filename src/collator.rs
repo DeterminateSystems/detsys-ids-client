@@ -183,6 +183,10 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 RawSignal::Identify(new, properties) => {
                     self.handle_message_identify(new, properties).await?;
                 }
+                RawSignal::SetPersonProperties(properties) => {
+                    self.handle_message_set_person_properties(properties)
+                        .await?;
+                }
                 RawSignal::AddGroup {
                     group_name,
                     group_member_id,
@@ -341,6 +345,25 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             .send(CollatedSignal::Event(self.msg_to_event(
                 snapshot,
                 "$identify".to_string(),
+                Some(properties.as_map()),
+            )))
+            .await
+            .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
+
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    async fn handle_message_set_person_properties(
+        &mut self,
+        properties: IdentifyProperties,
+    ) -> Result<(), SnapshotError> {
+        let snapshot = self.system_snapshotter.snapshot().await;
+
+        self.outgoing
+            .send(CollatedSignal::Event(self.msg_to_event(
+                snapshot,
+                "$set".to_string(),
                 Some(properties.as_map()),
             )))
             .await
