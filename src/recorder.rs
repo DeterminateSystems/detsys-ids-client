@@ -2,11 +2,11 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot::channel as oneshot;
 use tracing::Instrument;
 
-use crate::Map;
 use crate::checkin::Feature;
 use crate::collator::FeatureFacts;
 use crate::configuration_proxy::ConfigurationProxySignal;
 use crate::identity::DistinctId;
+use crate::{Map, PersonProperties};
 
 #[derive(Debug)]
 pub(crate) enum RawSignal {
@@ -23,13 +23,44 @@ pub(crate) enum RawSignal {
         tx: tokio::sync::oneshot::Sender<Map>,
     },
     FlushNow,
-    Identify(DistinctId),
+    Identify(DistinctId, IdentifyProperties),
     AddGroup {
         group_name: String,
         group_member_id: String,
     },
     Alias(String),
     Reset,
+}
+
+#[derive(Default, Debug, serde::Serialize)]
+pub struct IdentifyProperties {
+    #[serde(rename = "$set")]
+    pub set: PersonProperties,
+    #[serde(rename = "$set_once")]
+    pub set_once: PersonProperties,
+}
+
+impl IdentifyProperties {
+    pub(crate) fn as_map(&self) -> Map {
+        let val = serde_json::to_value(self)
+            .inspect_err(|e| {
+                tracing::error!(
+                    self = ?&self,
+                    error = ?e,
+                    "IdentifyProperties cannot convert to a Map"
+                );
+            })
+            .unwrap_or_default();
+
+        let serde_json::Value::Object(map) = val else {
+            tracing::error!(
+                self = ?&self,
+                "IdentifyProperties did not serialize to an Object"
+            );
+            return Map::default();
+        };
+        map
+    }
 }
 
 #[derive(Clone)]
@@ -209,9 +240,15 @@ impl Recorder {
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
     pub async fn identify(&self, new: DistinctId) {
+        self.identify_with_properties(new, IdentifyProperties::default())
+            .await;
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    pub async fn identify_with_properties(&self, new: DistinctId, properties: IdentifyProperties) {
         if let Err(e) = self
             .outgoing
-            .send(RawSignal::Identify(new))
+            .send(RawSignal::Identify(new, properties))
             .instrument(tracing::trace_span!("sending the Identify message"))
             .await
         {

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 pub use builder::Builder;
 pub use identity::{AnonymousDistinctId, DeviceId, DistinctId};
-pub use recorder::Recorder;
+pub use recorder::{IdentifyProperties, Recorder};
 pub use worker::Worker;
 
 pub type Map = serde_json::Map<String, serde_json::Value>;
