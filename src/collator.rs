@@ -10,7 +10,7 @@ use crate::{Groups, Map};
 
 #[derive(serde::Serialize, Debug)]
 pub(crate) enum CollatedSignal {
-    Event(Event),
+    Event(Box<Event>),
     FlushNow,
 }
 
@@ -206,7 +206,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             .send(CollatedSignal::FlushNow)
             .instrument(tracing::trace_span!("final FlushNow"))
             .await
-            .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+            .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
 
         Ok(())
     }
@@ -220,8 +220,8 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         snapshot: crate::system_snapshot::SystemSnapshot,
         event: String,
         properties: Option<Map>,
-    ) -> Event {
-        Event {
+    ) -> Box<Event> {
+        Box::new(Event {
             distinct_id: self.distinct_id(),
             name: event,
 
@@ -243,7 +243,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 now.to_rfc3339()
             },
             uuid: uuid::Uuid::new_v4(),
-        }
+        })
     }
 
     fn properties_to_store(&self) -> crate::storage::StoredProperties {
@@ -286,7 +286,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         );
 
         tx.send(props)
-            .map_err(|e| SnapshotError::Reply(format!("{:?}", e)))?;
+            .map_err(|e| SnapshotError::Reply(format!("{e:?}")))?;
 
         Ok(())
     }
@@ -313,14 +313,14 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 self.msg_to_event(snapshot, event_name, properties),
             ))
             .await
-            .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+            .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
 
         Ok(())
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
     async fn handle_message_identify(&mut self, new: DistinctId) -> Result<(), SnapshotError> {
-        let old = std::mem::replace(&mut self.distinct_id, Some(new));
+        let old = self.distinct_id.replace(new);
 
         if old.is_some() {
             // Reset our anon distinct ID so we don't link the old id to the new id
@@ -340,7 +340,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 None,
             )))
             .await
-            .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+            .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
 
         Ok(())
     }
@@ -373,7 +373,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 Some(properties),
             )))
             .await
-            .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+            .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
 
         Ok(())
     }
@@ -394,7 +394,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         self.outgoing
             .send(CollatedSignal::FlushNow)
             .await
-            .map_err(|e| SnapshotError::Forward(format!("{:?}", e)))?;
+            .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
         Ok(())
     }
 }

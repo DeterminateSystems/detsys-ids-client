@@ -114,7 +114,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
 
         reply
             .send(feat)
-            .map_err(|e| ConfigurationProxyError::Reply(format!("{:?}", e)))?;
+            .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
 
         Ok(())
     }
@@ -168,7 +168,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
 
         reply
             .send(feature_facts)
-            .map_err(|e| ConfigurationProxyError::Reply(format!("{:?}", e)))?;
+            .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
 
         if let Err(e) = self.change_notifier.send(()) {
             tracing::debug!(%e, "Error notifying subscribers to changed feature configuration");
@@ -183,7 +183,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     ) -> Result<(), ConfigurationProxyError> {
         reply
             .send(self.change_notifier.subscribe())
-            .map_err(|e| ConfigurationProxyError::Reply(format!("{:?}", e)))?;
+            .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
 
         Ok(())
     }

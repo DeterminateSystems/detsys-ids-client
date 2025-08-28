@@ -57,7 +57,7 @@ impl Transport for ReqwestTransport {
             return Ok(());
         }
 
-        Err(Self::Error::Response(resp))
+        Err(Self::Error::Response(Box::new(resp)))
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
@@ -92,7 +92,7 @@ pub enum ReqwestTransportError {
     Reqwest(#[from] reqwest::Error),
 
     #[error("Error with our request: {0:?}")]
-    Response(reqwest::Response),
+    Response(Box<reqwest::Response>),
 
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
