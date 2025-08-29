@@ -86,11 +86,6 @@ impl Worker {
             submitter_task,
         };
 
-        recorder
-            .trigger_configuration_refresh()
-            .instrument(tracing::debug_span!("Initial configuration sync"))
-            .await;
-
         (recorder, worker)
     }
 
