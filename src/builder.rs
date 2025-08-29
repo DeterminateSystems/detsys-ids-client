@@ -190,7 +190,7 @@ impl Builder {
             .build_with(
                 transport,
                 crate::system_snapshot::Generic::default(),
-                crate::storage::Generic::default(),
+                crate::storage::DefaultStorageChain::new().await,
             )
             .await)
     }
@@ -202,7 +202,7 @@ impl Builder {
         self.build_with(
             transport,
             crate::system_snapshot::Generic::default(),
-            crate::storage::Generic::default(),
+            crate::storage::DefaultStorageChain::new().await,
         )
         .await
     }

@@ -68,6 +68,7 @@ Note that `$anon_distinct_id`, `distinct_id`, and `$device_id` are disregarded i
 
 ### Files
 
+- `$XDG_STATE_HOME/systems.determinate.detsys-ids-client/storage.json` -- Contains data persisted by the JsonFile Storage implementation.
 - `/var/lib/determinate/identity.json` -- Contains correlation data that is provided by an external tool.
   This library only reads this file for aiding with feature flagging support.
 
