@@ -122,7 +122,6 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         let mut refresh_interval =
             tokio::time::interval(std::time::Duration::from_secs(60 * 60 * 2));
         refresh_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        refresh_interval.reset();
 
         loop {
             tokio::select! {
@@ -138,6 +137,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
                     refresh_interval.reset();
                 }
                 _ = refresh_interval.tick() => {
+                    tracing::debug!("Checking in after the refresh interval ticked");
                     self.check_in_now().await?;
                 }
             }
