@@ -17,12 +17,19 @@ use crate::{
 
 #[derive(Debug)]
 pub(crate) enum ConfigurationProxySignal {
+    QueryIfCheckedIn(OneshotSender<CheckinStatus>),
     GetFeature(
         String,
         OneshotSender<Option<Arc<Feature<serde_json::Value>>>>,
     ),
     CheckInNow(Map, OneshotSender<(Option<Checkin>, FeatureFacts)>),
     Subscribe(OneshotSender<broadcast::Receiver<()>>),
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CheckinStatus {
+    CheckedIn,
+    NotYet,
 }
 
 type CheckInPropsWithReply = (Map, OneshotSender<(Option<Checkin>, FeatureFacts)>);
@@ -102,6 +109,9 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
             };
 
             match event {
+                ConfigurationProxySignal::QueryIfCheckedIn(reply) => {
+                    self.handle_message_query_if_checked_in(reply).await?;
+                }
                 ConfigurationProxySignal::GetFeature(name, reply) => {
                     self.handle_message_get_feature(name, reply).await?;
                 }
@@ -142,6 +152,25 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
                 }
             }
         }
+    }
+
+    async fn handle_message_query_if_checked_in(
+        &self,
+        reply: OneshotSender<CheckinStatus>,
+    ) -> Result<(), ConfigurationProxyError> {
+        let status = self
+            .checkin
+            .read()
+            .await
+            .as_ref()
+            .map(|_| CheckinStatus::CheckedIn)
+            .unwrap_or(CheckinStatus::NotYet);
+
+        reply
+            .send(status)
+            .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
+
+        Ok(())
     }
 
     async fn handle_message_get_feature(

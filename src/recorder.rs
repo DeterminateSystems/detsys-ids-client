@@ -4,7 +4,7 @@ use tracing::Instrument;
 
 use crate::checkin::{Checkin, Feature};
 use crate::collator::FeatureFacts;
-use crate::configuration_proxy::ConfigurationProxySignal;
+use crate::configuration_proxy::{CheckinStatus, ConfigurationProxySignal};
 use crate::identity::DistinctId;
 use crate::{Map, PersonProperties};
 
@@ -62,6 +62,24 @@ impl IdentifyProperties {
         };
         map
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum RecorderError {
+    #[error("Timed out waiting for configuration to complete: {0:?}")]
+    WaitForConfiguration(#[from] tokio::time::error::Elapsed),
+
+    #[error("Failed to subscribe to the ConfigurationProxy for configuration changes")]
+    SubscribeFailed,
+
+    #[error(transparent)]
+    Subscription(#[from] tokio::sync::broadcast::error::RecvError),
+
+    #[error("Failed to signal the configuration proxy: '{0}'")]
+    SendToConfigurationProxy(String),
+
+    #[error(transparent)]
+    Response(#[from] tokio::sync::oneshot::error::RecvError),
 }
 
 pub struct Recorder {
@@ -170,6 +188,37 @@ impl Recorder {
     ) -> Option<Feature<T>> {
         let ptr = self.get_feature_payload::<String>(key).await?;
         self.get_feature::<T>(ptr).await
+    }
+
+    pub async fn wait_for_checkin(
+        &self,
+        duration: Option<std::time::Duration>,
+    ) -> Result<(), RecorderError> {
+        let (tx, rx) = oneshot();
+
+        let subscription = self.subscribe_to_feature_changes().await;
+
+        self.to_configuration_proxy
+            .send(ConfigurationProxySignal::QueryIfCheckedIn(tx))
+            .instrument(tracing::trace_span!(
+                "requesting check in status from the configuration proxy"
+            ))
+            .await
+            .map_err(|e| RecorderError::SendToConfigurationProxy(format!("{e:?}")))?;
+
+        if rx.await? == CheckinStatus::CheckedIn {
+            return Ok(());
+        }
+
+        let Some(mut subscription) = subscription else {
+            return Err(RecorderError::SubscribeFailed);
+        };
+
+        if let Some(duration) = duration {
+            Ok(tokio::time::timeout(duration, subscription.recv()).await??)
+        } else {
+            Ok(subscription.recv().await?)
+        }
     }
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
