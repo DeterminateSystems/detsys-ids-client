@@ -1,6 +1,8 @@
 mod generic;
+mod json_file;
 
 pub use generic::Generic;
+pub use json_file::JsonFile;
 
 use crate::checkin::Checkin;
 use crate::identity::AnonymousDistinctId;

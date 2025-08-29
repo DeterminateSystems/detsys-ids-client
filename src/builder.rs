@@ -9,6 +9,24 @@ use crate::transport::TransportsError;
 use crate::{DeviceId, DistinctId, Map, system_snapshot::SystemSnapshotter};
 use crate::{Groups, Recorder, Worker};
 
+macro_rules! build_with_default_storage {
+    ($self:expr, $transport:expr, $snapshot:expr) => {{
+        match $crate::storage::JsonFile::try_default().await {
+            Ok(json) => $self.build_with($transport, $snapshot, json).await,
+            Err(e) => {
+                tracing::debug!(
+                    ?e,
+                    "Failed to construct the default JsonFile storage, falling back to in-memory"
+                );
+
+                $self
+                    .build_with($transport, $snapshot, $crate::storage::Generic::default())
+                    .await
+            }
+        }
+    }};
+}
+
 #[derive(Default, Clone)]
 pub struct Builder {
     device_id: Option<DeviceId>,
@@ -186,25 +204,18 @@ impl Builder {
     pub async fn try_build(mut self) -> Result<(Recorder, Worker), TransportsError> {
         let transport = self.transport().await?;
 
-        Ok(self
-            .build_with(
-                transport,
-                crate::system_snapshot::Generic::default(),
-                crate::storage::Generic::default(),
-            )
-            .await)
+        Ok(build_with_default_storage!(
+            self,
+            transport,
+            crate::system_snapshot::Generic::default()
+        ))
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn build_or_default(mut self) -> (Recorder, Worker) {
         let transport = self.transport_or_default().await;
 
-        self.build_with(
-            transport,
-            crate::system_snapshot::Generic::default(),
-            crate::storage::Generic::default(),
-        )
-        .await
+        build_with_default_storage!(self, transport, crate::system_snapshot::Generic::default())
     }
 
     #[tracing::instrument(skip(self, snapshotter, storage))]
