@@ -8,10 +8,10 @@ use tokio::io::AsyncReadExt;
 const XDG_PREFIX: &str = "systems.determinate.detsys-ids-client";
 const XDG_STORAGE_FILENAME: &str = "storage.json";
 const NOTES: &[&str] = &[
-    "The IDs in this file are anonymous UUIDs unless you logged in with Determinate Systems.",
-    "Determinate Systems uses these IDs to know how many people use our software and to focus our limited research and development.",
-    "The data here contains no personally identifiable information about you.",
-    "You can delete this file at any time to create a new IDs.",
+    "The IDs in this file are randomly generated UUIDs.",
+    "Determinate Systems uses these IDs to know how many people use our software and how to focus our limited resources for research and development.",
+    "The data here contains no personally identifiable information.",
+    "You can delete this file at any time to create new IDs.",
     "",
     "See our privacy policy: https://determinate.systems/policies/privacy",
     "See our docs on telemetry: https://dtr.mn/telemetry",
