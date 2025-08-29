@@ -2,11 +2,11 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot::channel as oneshot;
 use tracing::Instrument;
 
-use crate::Map;
 use crate::checkin::Feature;
 use crate::collator::FeatureFacts;
 use crate::configuration_proxy::ConfigurationProxySignal;
 use crate::identity::DistinctId;
+use crate::{Map, PersonProperties};
 
 #[derive(Debug)]
 pub(crate) enum RawSignal {
@@ -23,7 +23,8 @@ pub(crate) enum RawSignal {
         tx: tokio::sync::oneshot::Sender<Map>,
     },
     FlushNow,
-    Identify(DistinctId),
+    Identify(DistinctId, IdentifyProperties),
+    SetPersonProperties(IdentifyProperties),
     AddGroup {
         group_name: String,
         group_member_id: String,
@@ -32,10 +33,51 @@ pub(crate) enum RawSignal {
     Reset,
 }
 
-#[derive(Clone)]
+#[derive(Default, Debug, serde::Serialize)]
+pub struct IdentifyProperties {
+    #[serde(rename = "$set")]
+    pub set: PersonProperties,
+    #[serde(rename = "$set_once")]
+    pub set_once: PersonProperties,
+}
+
+impl IdentifyProperties {
+    pub(crate) fn as_map(&self) -> Map {
+        let val = serde_json::to_value(self)
+            .inspect_err(|e| {
+                tracing::error!(
+                    self = ?&self,
+                    error = ?e,
+                    "IdentifyProperties cannot convert to a Map"
+                );
+            })
+            .unwrap_or_default();
+
+        let serde_json::Value::Object(map) = val else {
+            tracing::error!(
+                self = ?&self,
+                "IdentifyProperties did not serialize to an Object"
+            );
+            return Map::default();
+        };
+        map
+    }
+}
+
 pub struct Recorder {
     outgoing: Sender<RawSignal>,
+    auto_refresh_config: bool,
     to_configuration_proxy: Sender<ConfigurationProxySignal>,
+}
+
+impl Clone for Recorder {
+    fn clone(&self) -> Self {
+        Self {
+            outgoing: self.outgoing.clone(),
+            auto_refresh_config: true,
+            to_configuration_proxy: self.to_configuration_proxy.clone(),
+        }
+    }
 }
 
 impl std::fmt::Debug for Recorder {
@@ -53,7 +95,26 @@ impl Recorder {
         Self {
             outgoing: snapshotter_tx,
             to_configuration_proxy,
+            auto_refresh_config: true,
         }
+    }
+
+    // Execute a series of operations without triggering multiple configuration refreshes.
+    // Note: there are no atomic semantics, and configuration is refreshed at the end no matter what your function does.
+    pub async fn in_configuration_txn<F, T>(&self, f: F) -> T
+    where
+        F: AsyncFnOnce(&Recorder) -> T,
+    {
+        let mut rec = self.clone();
+
+        rec.auto_refresh_config = false;
+
+        let ret = f(self).await;
+
+        rec.auto_refresh_config = true;
+        rec.trigger_configuration_refresh().await;
+
+        ret
     }
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
@@ -209,13 +270,37 @@ impl Recorder {
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
     pub async fn identify(&self, new: DistinctId) {
+        self.identify_with_properties(new, IdentifyProperties::default())
+            .await;
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    pub async fn identify_with_properties(&self, new: DistinctId, properties: IdentifyProperties) {
         if let Err(e) = self
             .outgoing
-            .send(RawSignal::Identify(new))
+            .send(RawSignal::Identify(new, properties))
             .instrument(tracing::trace_span!("sending the Identify message"))
             .await
         {
             tracing::error!(error = ?e, "Failed to enqueue swap_identity message");
+        }
+
+        self.trigger_configuration_refresh()
+            .instrument(tracing::trace_span!("triggering a configuration refresh"))
+            .await;
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    pub async fn set_person_properties(&self, properties: IdentifyProperties) {
+        if let Err(e) = self
+            .outgoing
+            .send(RawSignal::SetPersonProperties(properties))
+            .instrument(tracing::trace_span!(
+                "sending the SetPersonProperties message"
+            ))
+            .await
+        {
+            tracing::error!(error = ?e, "Failed to enqueue set_person_properties message");
         }
 
         self.trigger_configuration_refresh()
@@ -304,6 +389,11 @@ impl Recorder {
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
     pub(crate) async fn trigger_configuration_refresh(&self) {
+        if !self.auto_refresh_config {
+            tracing::trace!("Not refreshing configuration because it is paused");
+            return;
+        }
+
         let (tx, rx) = oneshot();
 
         let session_properties = self

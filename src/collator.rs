@@ -5,7 +5,7 @@ use tracing::Instrument;
 
 use crate::ds_correlation::Correlation;
 use crate::identity::{AnonymousDistinctId, DeviceId, DistinctId};
-use crate::recorder::RawSignal;
+use crate::recorder::{IdentifyProperties, RawSignal};
 use crate::{Groups, Map};
 
 #[derive(serde::Serialize, Debug)]
@@ -180,8 +180,12 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
                 } => {
                     self.handle_message_event(event_name, properties).await?;
                 }
-                RawSignal::Identify(new) => {
-                    self.handle_message_identify(new).await?;
+                RawSignal::Identify(new, properties) => {
+                    self.handle_message_identify(new, properties).await?;
+                }
+                RawSignal::SetPersonProperties(properties) => {
+                    self.handle_message_set_person_properties(properties)
+                        .await?;
                 }
                 RawSignal::AddGroup {
                     group_name,
@@ -319,7 +323,11 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
-    async fn handle_message_identify(&mut self, new: DistinctId) -> Result<(), SnapshotError> {
+    async fn handle_message_identify(
+        &mut self,
+        new: DistinctId,
+        properties: IdentifyProperties,
+    ) -> Result<(), SnapshotError> {
         let old = self.distinct_id.replace(new);
 
         if old.is_some() {
@@ -337,7 +345,26 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
             .send(CollatedSignal::Event(self.msg_to_event(
                 snapshot,
                 "$identify".to_string(),
-                None,
+                Some(properties.as_map()),
+            )))
+            .await
+            .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
+
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip(self)))]
+    async fn handle_message_set_person_properties(
+        &mut self,
+        properties: IdentifyProperties,
+    ) -> Result<(), SnapshotError> {
+        let snapshot = self.system_snapshotter.snapshot().await;
+
+        self.outgoing
+            .send(CollatedSignal::Event(self.msg_to_event(
+                snapshot,
+                "$set".to_string(),
+                Some(properties.as_map()),
             )))
             .await
             .map_err(|e| SnapshotError::Forward(format!("{e:?}")))?;
