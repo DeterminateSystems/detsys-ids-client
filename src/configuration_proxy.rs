@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use thiserror::Error;
+use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -24,6 +25,8 @@ pub(crate) enum ConfigurationProxySignal {
     Subscribe(OneshotSender<broadcast::Receiver<()>>),
 }
 
+type CheckInPropsWithReply = (Map, OneshotSender<(Option<Checkin>, FeatureFacts)>);
+
 #[derive(Error, Debug)]
 pub(crate) enum ConfigurationProxyError {
     #[error("Replying with a collated message failed: {0}")]
@@ -34,12 +37,15 @@ pub(crate) enum ConfigurationProxyError {
 
     #[error(transparent)]
     CollatorRecvError(#[from] tokio::sync::oneshot::error::RecvError),
+
+    #[error(transparent)]
+    BackgroundCheckinSend(#[from] mpsc::error::SendError<CheckInPropsWithReply>),
 }
 
 pub(crate) struct ConfigurationProxy<T: crate::transport::Transport> {
-    checkin: Option<Checkin>,
+    checkin: RwLock<Option<Checkin>>,
     transport: T,
-    incoming: mpsc::Receiver<ConfigurationProxySignal>,
+    incoming: Option<mpsc::Receiver<ConfigurationProxySignal>>,
     collator: mpsc::Sender<crate::recorder::RawSignal>,
     change_notifier: broadcast::Sender<()>,
 }
@@ -51,20 +57,68 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         collator: mpsc::Sender<crate::recorder::RawSignal>,
     ) -> Self {
         Self {
-            checkin: None,
+            checkin: None.into(),
             transport,
-            incoming,
+            incoming: Some(incoming),
             collator,
             change_notifier: broadcast::Sender::new(1),
         }
     }
 
-    pub(crate) fn bootstrap_checkin(&mut self, checkin: Option<Checkin>) {
-        self.checkin = checkin;
+    pub(crate) async fn bootstrap_checkin(&mut self, checkin: Option<Checkin>) {
+        let mut c = self.checkin.write().await;
+        *c = checkin;
     }
 
     #[tracing::instrument(skip(self))]
     pub(crate) async fn execute(mut self) -> Result<(), ConfigurationProxyError> {
+        let incoming = self.incoming.take().expect("Incoming stream is None");
+
+        let (checkin_trigger, checkin_rx) = mpsc::channel::<CheckInPropsWithReply>(100);
+
+        tokio::select! {
+            biased;
+            e = self.execute_incoming_worker(incoming, checkin_trigger) => {
+                return e;
+            },
+            e = self.execute_checkin_worker(checkin_rx) => {
+                return e;
+            }
+        };
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub(crate) async fn execute_incoming_worker(
+        &self,
+        mut incoming: mpsc::Receiver<ConfigurationProxySignal>,
+        checkin_trigger: mpsc::Sender<CheckInPropsWithReply>,
+    ) -> Result<(), ConfigurationProxyError> {
+        loop {
+            let event = incoming.recv().await;
+            let Some(event) = event else {
+                tracing::debug!("Configuration proxy clients hung up, shutting down");
+
+                return Ok(());
+            };
+
+            match event {
+                ConfigurationProxySignal::GetFeature(name, reply) => {
+                    self.handle_message_get_feature(name, reply).await?;
+                }
+                ConfigurationProxySignal::CheckInNow(session_properties, reply) => {
+                    checkin_trigger.send((session_properties, reply)).await?;
+                }
+                ConfigurationProxySignal::Subscribe(reply) => {
+                    self.handle_message_subscribe(reply).await?;
+                }
+            }
+        }
+    }
+
+    async fn execute_checkin_worker(
+        &self,
+        mut checkin_rx: mpsc::Receiver<CheckInPropsWithReply>,
+    ) -> Result<(), ConfigurationProxyError> {
         let mut refresh_interval =
             tokio::time::interval(std::time::Duration::from_secs(60 * 60 * 2));
         refresh_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -73,33 +127,20 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         loop {
             tokio::select! {
                 biased;
-                event = self.incoming.recv() => {
-                    let Some(event) = event else {
-                        tracing::debug!("Configuration proxy clients hung up, shutting down");
+                event = checkin_rx.recv() => {
+                    let Some((session_properties, reply)) = event else {
+                        tracing::debug!("Incoming worker hung up, shutting down");
 
                         return Ok(());
                     };
 
-                    match event {
-                        ConfigurationProxySignal::GetFeature(name, reply) => {
-                            self.handle_message_get_feature(name, reply).await?;
-                        }
-                        ConfigurationProxySignal::CheckInNow(session_properties, reply) => {
-                            self.handle_message_check_in_now(session_properties, reply)
-                                .await?;
-                            refresh_interval.reset();
-                        }
-                        ConfigurationProxySignal::Subscribe(reply) => {
-                            self.handle_message_subscribe(reply).await?;
-                        }
-                    }
-                },
+                    self.handle_message_check_in_now(session_properties, reply).await?;
+                    refresh_interval.reset();
+                }
                 _ = refresh_interval.tick() => {
                     self.check_in_now().await?;
-                },
-
-
-            };
+                }
+            }
         }
     }
 
@@ -110,6 +151,8 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     ) -> Result<(), ConfigurationProxyError> {
         let feat = self
             .checkin
+            .read()
+            .await
             .as_ref()
             .map(|c| &c.options)
             .as_ref()
@@ -123,7 +166,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         Ok(())
     }
 
-    async fn check_in_now(&mut self) -> Result<(), ConfigurationProxyError> {
+    async fn check_in_now(&self) -> Result<(), ConfigurationProxyError> {
         let session_properties = {
             let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -151,7 +194,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     }
 
     async fn handle_message_check_in_now(
-        &mut self,
+        &self,
         session_properties: Map,
         reply: OneshotSender<(Option<Checkin>, FeatureFacts)>,
     ) -> Result<(), ConfigurationProxyError> {
@@ -162,29 +205,32 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
             .inspect_err(|e| tracing::debug!(%e, "Error refreshing checkin configuration"))
             .ok();
 
-        let changed = fresh_checkin.is_some() && fresh_checkin != self.checkin;
+        let mut current_checkin = self.checkin.write().await;
+
+        let changed = fresh_checkin.is_some() && fresh_checkin != *current_checkin;
 
         tracing::trace!(
             changed,
-            cached = ?self.checkin,
+            cached = ?current_checkin,
             fresh = ?fresh_checkin,
             "Checked in"
         );
 
         if changed {
             if let Some(fresh) = fresh_checkin {
-                self.checkin.replace(fresh);
+                current_checkin.replace(fresh);
             }
         }
 
-        let feature_facts = self
-            .checkin
+        let current_checkin = current_checkin.downgrade().clone();
+
+        let feature_facts = current_checkin
             .as_ref()
             .map(|f| f.as_feature_facts())
             .unwrap_or_default();
 
         reply
-            .send((self.checkin.clone(), feature_facts))
+            .send((current_checkin.clone(), feature_facts))
             .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
 
         if changed {
@@ -197,7 +243,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     }
 
     async fn handle_message_subscribe(
-        &mut self,
+        &self,
         reply: OneshotSender<broadcast::Receiver<()>>,
     ) -> Result<(), ConfigurationProxyError> {
         reply
