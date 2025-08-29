@@ -94,7 +94,7 @@ impl Storage for JsonFile {
     async fn load(&self) -> Result<Option<StoredProperties>, Error> {
         let mut file = OpenOptions::new()
             .read(true)
-            .write(true)
+            .write(false)
             .create(false)
             .truncate(false)
             .open(&self.location)
