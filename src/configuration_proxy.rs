@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use thiserror::Error;
+use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -37,7 +38,7 @@ pub(crate) enum ConfigurationProxyError {
 }
 
 pub(crate) struct ConfigurationProxy<T: crate::transport::Transport> {
-    checkin: Option<Checkin>,
+    checkin: RwLock<Option<Checkin>>,
     transport: T,
     incoming: mpsc::Receiver<ConfigurationProxySignal>,
     collator: mpsc::Sender<crate::recorder::RawSignal>,
@@ -51,7 +52,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         collator: mpsc::Sender<crate::recorder::RawSignal>,
     ) -> Self {
         Self {
-            checkin: None,
+            checkin: None.into(),
             transport,
             incoming,
             collator,
@@ -59,8 +60,9 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         }
     }
 
-    pub(crate) fn bootstrap_checkin(&mut self, checkin: Option<Checkin>) {
-        self.checkin = checkin;
+    pub(crate) async fn bootstrap_checkin(&mut self, checkin: Option<Checkin>) {
+        let mut c = self.checkin.write().await;
+        *c = checkin;
     }
 
     #[tracing::instrument(skip(self))]
@@ -110,6 +112,8 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     ) -> Result<(), ConfigurationProxyError> {
         let feat = self
             .checkin
+            .read()
+            .await
             .as_ref()
             .map(|c| &c.options)
             .as_ref()
@@ -162,29 +166,32 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
             .inspect_err(|e| tracing::debug!(%e, "Error refreshing checkin configuration"))
             .ok();
 
-        let changed = fresh_checkin.is_some() && fresh_checkin != self.checkin;
+        let mut current_checkin = self.checkin.write().await;
+
+        let changed = fresh_checkin.is_some() && fresh_checkin != *current_checkin;
 
         tracing::trace!(
             changed,
-            cached = ?self.checkin,
+            cached = ?current_checkin,
             fresh = ?fresh_checkin,
             "Checked in"
         );
 
         if changed {
             if let Some(fresh) = fresh_checkin {
-                self.checkin.replace(fresh);
+                current_checkin.replace(fresh);
             }
         }
 
-        let feature_facts = self
-            .checkin
+        let current_checkin = current_checkin.downgrade().clone();
+
+        let feature_facts = current_checkin
             .as_ref()
             .map(|f| f.as_feature_facts())
             .unwrap_or_default();
 
         reply
-            .send((self.checkin.clone(), feature_facts))
+            .send((current_checkin.clone(), feature_facts))
             .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
 
         if changed {
@@ -197,7 +204,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     }
 
     async fn handle_message_subscribe(
-        &mut self,
+        &self,
         reply: OneshotSender<broadcast::Receiver<()>>,
     ) -> Result<(), ConfigurationProxyError> {
         reply

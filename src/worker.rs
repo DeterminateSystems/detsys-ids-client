@@ -70,7 +70,9 @@ impl Worker {
         .await;
         let submitter = Submitter::new(transport, submitter_rx);
 
-        configuration.bootstrap_checkin(collator.get_checkin().cloned());
+        configuration
+            .bootstrap_checkin(collator.get_checkin().cloned())
+            .await;
 
         let span = tracing::debug_span!("spawned worker");
 
