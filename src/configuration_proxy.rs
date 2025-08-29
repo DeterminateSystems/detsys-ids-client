@@ -20,7 +20,7 @@ pub(crate) enum ConfigurationProxySignal {
         String,
         OneshotSender<Option<Arc<Feature<serde_json::Value>>>>,
     ),
-    CheckInNow(Map, OneshotSender<FeatureFacts>),
+    CheckInNow(Map, OneshotSender<(Option<Checkin>, FeatureFacts)>),
     Subscribe(OneshotSender<broadcast::Receiver<()>>),
 }
 
@@ -57,6 +57,10 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
             collator,
             change_notifier: broadcast::Sender::new(1),
         }
+    }
+
+    pub(crate) fn bootstrap_checkin(&mut self, checkin: Option<Checkin>) {
+        self.checkin = checkin;
     }
 
     #[tracing::instrument(skip(self))]
@@ -149,15 +153,28 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     async fn handle_message_check_in_now(
         &mut self,
         session_properties: Map,
-        reply: OneshotSender<FeatureFacts>,
+        reply: OneshotSender<(Option<Checkin>, FeatureFacts)>,
     ) -> Result<(), ConfigurationProxyError> {
-        if let Ok(fresh_checkin) = self
+        let fresh_checkin: Option<Checkin> = self
             .transport
             .checkin(session_properties)
             .await
             .inspect_err(|e| tracing::debug!(%e, "Error refreshing checkin configuration"))
-        {
-            self.checkin = Some(fresh_checkin);
+            .ok();
+
+        let changed = fresh_checkin.is_some() && fresh_checkin != self.checkin;
+
+        tracing::trace!(
+            changed,
+            cached = ?self.checkin,
+            fresh = ?fresh_checkin,
+            "Checked in"
+        );
+
+        if changed {
+            if let Some(fresh) = fresh_checkin {
+                self.checkin.replace(fresh);
+            }
         }
 
         let feature_facts = self
@@ -167,11 +184,13 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
             .unwrap_or_default();
 
         reply
-            .send(feature_facts)
+            .send((self.checkin.clone(), feature_facts))
             .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
 
-        if let Err(e) = self.change_notifier.send(()) {
-            tracing::debug!(%e, "Error notifying subscribers to changed feature configuration");
+        if changed {
+            if let Err(e) = self.change_notifier.send(()) {
+                tracing::debug!(%e, "Error notifying subscribers to changed feature configuration");
+            }
         }
 
         Ok(())

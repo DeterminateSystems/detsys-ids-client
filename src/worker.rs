@@ -53,7 +53,7 @@ impl Worker {
         let (to_submitter, submitter_rx) = channel(1000);
 
         let recorder = Recorder::new(to_collator.clone(), to_configuration_proxy);
-        let configuration =
+        let mut configuration =
             ConfigurationProxy::new(transport.clone(), configuration_proxy_rx, to_collator);
         let collator = Collator::new(
             system_snapshotter,
@@ -69,6 +69,8 @@ impl Worker {
         )
         .await;
         let submitter = Submitter::new(transport, submitter_rx);
+
+        configuration.bootstrap_checkin(collator.get_checkin().cloned());
 
         let span = tracing::debug_span!("spawned worker");
 

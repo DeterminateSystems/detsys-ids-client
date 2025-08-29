@@ -2,7 +2,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot::channel as oneshot;
 use tracing::Instrument;
 
-use crate::checkin::Feature;
+use crate::checkin::{Checkin, Feature};
 use crate::collator::FeatureFacts;
 use crate::configuration_proxy::ConfigurationProxySignal;
 use crate::identity::DistinctId;
@@ -14,7 +14,7 @@ pub(crate) enum RawSignal {
         key: String,
         value: serde_json::Value,
     },
-    UpdateFeatureFacts(FeatureFacts),
+    UpdateFeatureConfiguration(Option<Checkin>, FeatureFacts),
     Event {
         event_name: String,
         properties: Option<Map>,
@@ -118,7 +118,9 @@ impl Recorder {
     }
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
-    pub async fn get_feature_variant<T: serde::de::DeserializeOwned + std::fmt::Debug + Send>(
+    pub async fn get_feature_variant<
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send,
+    >(
         &self,
         key: impl Into<String> + std::fmt::Debug,
     ) -> Option<T> {
@@ -129,7 +131,7 @@ impl Recorder {
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
     pub async fn get_feature_ptr_variant<
-        T: serde::de::DeserializeOwned + Send + std::fmt::Debug,
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Send + std::fmt::Debug,
     >(
         &self,
         key: impl Into<String> + std::fmt::Debug,
@@ -140,7 +142,9 @@ impl Recorder {
     }
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
-    pub async fn get_feature_payload<T: serde::de::DeserializeOwned + Send + std::fmt::Debug>(
+    pub async fn get_feature_payload<
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Send + std::fmt::Debug,
+    >(
         &self,
         key: impl Into<String> + std::fmt::Debug,
     ) -> Option<T> {
@@ -149,7 +153,7 @@ impl Recorder {
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
     pub async fn get_feature_ptr_payload<
-        T: serde::de::DeserializeOwned + Send + std::fmt::Debug,
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Send + std::fmt::Debug,
     >(
         &self,
         key: impl Into<String> + std::fmt::Debug,
@@ -158,7 +162,9 @@ impl Recorder {
     }
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
-    pub async fn get_feature_ptr<T: serde::de::DeserializeOwned + Send + std::fmt::Debug>(
+    pub async fn get_feature_ptr<
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Send + std::fmt::Debug,
+    >(
         &self,
         key: impl Into<String> + std::fmt::Debug,
     ) -> Option<Feature<T>> {
@@ -167,7 +173,9 @@ impl Recorder {
     }
 
     #[tracing::instrument(skip(self), ret(level = tracing::Level::TRACE))]
-    pub async fn get_feature<T: serde::de::DeserializeOwned + Send + std::fmt::Debug>(
+    pub async fn get_feature<
+        T: serde::ser::Serialize + serde::de::DeserializeOwned + Send + std::fmt::Debug,
+    >(
         &self,
         key: impl Into<String> + std::fmt::Debug,
     ) -> Option<Feature<T>> {
@@ -414,11 +422,11 @@ impl Recorder {
             tracing::error!(error = ?e, "Failed to enqueue CheckInNow message");
         }
 
-        let feats = match rx
+        let (config, feats) = match rx
             .instrument(tracing::debug_span!("receive feature facts"))
             .await
         {
-            Ok(feats) => feats,
+            Ok((config, feats)) => (config, feats),
             Err(e) => {
                 tracing::error!(error = ?e, "Failed to refresh the configuration");
 
@@ -428,7 +436,7 @@ impl Recorder {
 
         if let Err(e) = self
             .outgoing
-            .send(RawSignal::UpdateFeatureFacts(feats))
+            .send(RawSignal::UpdateFeatureConfiguration(config, feats))
             .instrument(tracing::debug_span!("forward feature facts"))
             .await
         {
