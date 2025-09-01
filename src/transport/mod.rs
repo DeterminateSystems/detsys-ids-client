@@ -13,7 +13,7 @@ mod http;
 mod srv_http;
 
 pub(crate) const APPLICATION_JSON: &str = "application/json";
-pub(crate) trait Transport: Send + Clone {
+pub(crate) trait Transport: Send + Sync + Clone + 'static {
     type Error: std::error::Error;
 
     fn checkin(

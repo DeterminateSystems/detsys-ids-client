@@ -13,6 +13,9 @@ pub mod system_snapshot;
 pub mod transport;
 mod worker;
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashMap;
 
 pub use builder::Builder;
