@@ -86,10 +86,10 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         tokio::select! {
             biased;
             e = self.execute_incoming_worker(incoming, checkin_trigger) => {
-                return e;
+                return Ok(e);
             },
             e = self.execute_checkin_worker(checkin_rx) => {
-                return e;
+                return Ok(e);
             }
         };
     }
@@ -99,27 +99,35 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         &self,
         mut incoming: mpsc::Receiver<ConfigurationProxySignal>,
         checkin_trigger: mpsc::Sender<CheckInPropsWithReply>,
-    ) -> Result<(), ConfigurationProxyError> {
+    ) -> () {
         loop {
             let event = incoming.recv().await;
             let Some(event) = event else {
                 tracing::debug!("Configuration proxy clients hung up, shutting down");
 
-                return Ok(());
+                return;
             };
 
             match event {
                 ConfigurationProxySignal::QueryIfCheckedIn(reply) => {
-                    self.handle_message_query_if_checked_in(reply).await?;
+                    if let Err(e) = self.handle_message_query_if_checked_in(reply).await {
+                        tracing::debug!(%e, "Failure while handling a QueryIfCheckedIn message");
+                    }
                 }
                 ConfigurationProxySignal::GetFeature(name, reply) => {
-                    self.handle_message_get_feature(name, reply).await?;
+                    if let Err(e) = self.handle_message_get_feature(name, reply).await {
+                        tracing::debug!(%e, "Failure while handling a GetFeature message");
+                    }
                 }
                 ConfigurationProxySignal::CheckInNow(session_properties, reply) => {
-                    checkin_trigger.send((session_properties, reply)).await?;
+                    if let Err(e) = checkin_trigger.send((session_properties, reply)).await {
+                        tracing::debug!(%e, "Failure while handling a CheckInNow message");
+                    }
                 }
                 ConfigurationProxySignal::Subscribe(reply) => {
-                    self.handle_message_subscribe(reply).await?;
+                    if let Err(e) = self.handle_message_subscribe(reply).await {
+                        tracing::debug!(%e, "Failure while handling a Subscribe message");
+                    }
                 }
             }
         }
@@ -128,7 +136,7 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
     async fn execute_checkin_worker(
         &self,
         mut checkin_rx: mpsc::Receiver<CheckInPropsWithReply>,
-    ) -> Result<(), ConfigurationProxyError> {
+    ) -> () {
         let mut refresh_interval =
             tokio::time::interval(std::time::Duration::from_secs(60 * 60 * 2));
         refresh_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -140,15 +148,19 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
                     let Some((session_properties, reply)) = event else {
                         tracing::debug!("Incoming worker hung up, shutting down");
 
-                        return Ok(());
+                        return;
                     };
 
-                    self.handle_message_check_in_now(session_properties, reply).await?;
+                    if let Err(e) = self.handle_message_check_in_now(session_properties, reply).await {
+                        tracing::debug!(%e, "Failure while handling a CheckInNow message");
+                    }
                     refresh_interval.reset();
                 }
                 _ = refresh_interval.tick() => {
                     tracing::debug!("Checking in after the refresh interval ticked");
-                    self.check_in_now().await?;
+                    if let Err(e) = self.check_in_now().await {
+                        tracing::debug!(%e, "Failure processing a refresh tick");
+                    }
                 }
             }
         }

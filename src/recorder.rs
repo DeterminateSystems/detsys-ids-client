@@ -207,6 +207,7 @@ impl Recorder {
             .map_err(|e| RecorderError::SendToConfigurationProxy(format!("{e:?}")))?;
 
         if rx.await? == CheckinStatus::CheckedIn {
+            tracing::debug!("Already checked in!");
             return Ok(());
         }
 

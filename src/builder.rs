@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::identity::AnonymousDistinctId;
 use crate::storage::Storage;
-use crate::transport::TransportsError;
+use crate::transport::{Transport, TransportsError};
 use crate::{DeviceId, DistinctId, Map, system_snapshot::SystemSnapshotter};
 use crate::{Groups, Recorder, Worker};
 
@@ -230,9 +230,9 @@ impl Builder {
     }
 
     #[tracing::instrument(skip(self, transport, snapshotter, storage))]
-    async fn build_with<S: SystemSnapshotter, P: Storage>(
+    pub(crate) async fn build_with<T: Transport, S: SystemSnapshotter, P: Storage>(
         &mut self,
-        transport: crate::transport::Transports,
+        transport: T,
         snapshotter: S,
         storage: P,
     ) -> (Recorder, Worker) {
