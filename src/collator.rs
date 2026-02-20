@@ -101,7 +101,7 @@ impl<F: crate::system_snapshot::SystemSnapshotter, P: crate::storage::Storage> C
         mut correlation_data: Correlation,
     ) -> Self {
         facts.append(&mut correlation_data.properties);
-        groups.extend(correlation_data.groups_as_hashmap());
+        groups.extend(correlation_data.groups_as_btreemap());
 
         let stored_ident = storage.load().await.ok().flatten();
 

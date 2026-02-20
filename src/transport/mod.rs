@@ -105,7 +105,7 @@ impl Transport for Transports {
     ) -> Result<crate::checkin::Checkin, Self::Error> {
         match self {
             Self::None => Ok(crate::checkin::Checkin {
-                options: std::collections::HashMap::new(),
+                options: std::collections::BTreeMap::new(),
                 ..Default::default()
             }),
             Self::File(t) => Ok(t.checkin(session_properties).await?),

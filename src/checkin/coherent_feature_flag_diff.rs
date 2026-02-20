@@ -45,7 +45,7 @@ mod tests {
 
     use super::*;
     use serde_json::json;
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
     use std::sync::Arc;
 
     fn feat(
@@ -63,7 +63,7 @@ mod tests {
     }
 
     fn empty() -> CoherentFeatureFlags {
-        HashMap::new()
+        BTreeMap::new()
     }
 
     #[test]

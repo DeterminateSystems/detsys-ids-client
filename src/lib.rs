@@ -16,7 +16,7 @@ mod worker;
 #[cfg(test)]
 mod test;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub use builder::Builder;
 pub use identity::{AnonymousDistinctId, DeviceId, DistinctId};
@@ -24,7 +24,7 @@ pub use recorder::{IdentifyProperties, Recorder};
 pub use worker::Worker;
 
 pub type Map = serde_json::Map<String, serde_json::Value>;
-pub type Groups = HashMap<String, String>;
+pub type Groups = BTreeMap<String, String>;
 pub type PersonProperties = Map;
 
 #[macro_export]

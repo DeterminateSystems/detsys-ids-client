@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::os::unix::ffi::OsStrExt;
 
 use serde::Deserialize;
@@ -14,7 +14,7 @@ enum CorrelationInputs {
     Direct(Correlation),
 }
 
-type OptionalGroups = HashMap<String, Option<String>>;
+type OptionalGroups = BTreeMap<String, Option<String>>;
 
 impl Correlation {
     #[tracing::instrument]
@@ -56,7 +56,7 @@ impl Correlation {
         }
     }
 
-    pub(crate) fn groups_as_hashmap(&self) -> crate::Groups {
+    pub(crate) fn groups_as_btreemap(&self) -> crate::Groups {
         self.groups
             .clone()
             .into_iter()
@@ -176,7 +176,7 @@ mod tests {
                 run: Some("GHWJR-xxx".into()),
                 run_differentiator: Some("GHWJA-xxx".into()),
                 workflow: Some("GHW-xxx".into()),
-                groups: std::collections::HashMap::from_iter(
+                groups: std::collections::BTreeMap::from_iter(
                     [
                         (
                             "github_organization".to_string(),
@@ -193,7 +193,7 @@ mod tests {
                     session_id: None,
                     window_id: None,
                     device_id: None,
-                    groups: std::collections::HashMap::new(),
+                    groups: std::collections::BTreeMap::new(),
                     properties: super::Map::from_iter(
                         [
                             (
@@ -238,7 +238,7 @@ mod tests {
                 window_id: None,
                 device_id: None,
 
-                groups: std::collections::HashMap::from_iter(
+                groups: std::collections::BTreeMap::from_iter(
                     [
                         (
                             "github_organization".to_string(),
