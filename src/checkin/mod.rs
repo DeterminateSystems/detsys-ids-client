@@ -2,7 +2,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
+mod server_options;
 use crate::{Map, collator::FeatureFacts};
+pub(crate) use server_options::ServerOptions;
 
 pub(crate) type CoherentFeatureFlags = HashMap<String, Arc<Feature<serde_json::Value>>>;
 
@@ -11,11 +13,6 @@ pub struct Checkin {
     #[serde(default, skip_serializing)]
     pub(crate) server_options: ServerOptions,
     pub(crate) options: CoherentFeatureFlags,
-}
-
-#[derive(Clone, Debug, Deserialize, Default, PartialEq, Eq)]
-pub(crate) struct ServerOptions {
-    pub(crate) compression_algorithms: crate::compression_set::CompressionSet,
 }
 
 impl Checkin {
