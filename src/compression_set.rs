@@ -3,7 +3,7 @@ use tokio::io::AsyncWriteExt;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CompressionSet {
-    zstd: bool,
+    pub(crate) zstd: bool,
 }
 
 impl CompressionSet {
