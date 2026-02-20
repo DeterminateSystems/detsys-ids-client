@@ -1,7 +1,11 @@
+mod checkin_diff;
+mod coherent_feature_flag_diff;
 mod coherent_feature_flags;
 mod data;
 mod feature;
+mod feature_diff;
 mod server_options;
+pub(crate) use checkin_diff::CheckinDiff;
 pub(crate) use coherent_feature_flags::CoherentFeatureFlags;
 pub(crate) use data::Checkin;
 pub(crate) use feature::Feature;

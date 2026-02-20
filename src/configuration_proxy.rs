@@ -8,6 +8,7 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender as OneshotSender;
 use tracing::Instrument;
 
+use crate::checkin::CheckinDiff;
 use crate::recorder::RawSignal;
 use crate::{
     Map,
@@ -249,13 +250,11 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
         let mut current_checkin = self.checkin.write().await;
 
         let changed = fresh_checkin.is_some() && fresh_checkin != *current_checkin;
+        let diff = fresh_checkin
+            .diff(current_checkin.as_ref())
+            .unwrap_or_else(|| "No change".into());
 
-        tracing::trace!(
-            changed,
-            cached = ?current_checkin,
-            fresh = ?fresh_checkin,
-            "Checked in"
-        );
+        tracing::trace!(changed, diff, "Checked in");
 
         if changed {
             if let Some(fresh) = fresh_checkin {
