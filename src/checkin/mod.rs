@@ -2,8 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
+mod feature;
 mod server_options;
 use crate::{Map, collator::FeatureFacts};
+pub(crate) use feature::Feature;
 pub(crate) use server_options::ServerOptions;
 
 pub(crate) type CoherentFeatureFlags = HashMap<String, Arc<Feature<serde_json::Value>>>;
@@ -33,17 +35,6 @@ impl Checkin {
 
         FeatureFacts(feature_facts)
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Feature<T: serde::ser::Serialize + serde::de::DeserializeOwned> {
-    pub variant: serde_json::Value,
-    #[serde(
-        with = "crate::json_string",
-        skip_serializing_if = "Option::is_none",
-        default
-    )]
-    pub payload: Option<T>,
 }
 
 #[cfg(test)]
