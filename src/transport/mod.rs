@@ -12,7 +12,12 @@ mod file;
 mod http;
 mod srv_http;
 
+#[cfg(not(feature = "fips"))]
+const IDS_HOST: &str = "install.determinate.systems";
+#[cfg(feature = "fips")]
+const IDS_HOST: &str = "install.determinate.us";
 pub(crate) const APPLICATION_JSON: &str = "application/json";
+
 pub(crate) trait Transport: Send + Sync + Clone + 'static {
     type Error: std::error::Error;
 
@@ -26,10 +31,11 @@ pub(crate) trait Transport: Send + Sync + Clone + 'static {
 
 pub(crate) fn default_transport_backend() -> (String, Url, Option<Vec<url::Host>>) {
     (
-        "_detsys_ids._tcp.install.determinate.systems.".to_string(),
-        reqwest::Url::parse("https://install.determinate.systems").unwrap(),
+        format!("_detsys_ids._tcp.{IDS_HOST}.").to_string(),
+        reqwest::Url::parse(&format!("https://{IDS_HOST}")).unwrap(),
         Some(vec![
-            url::Host::Domain(".install.determinate.systems.".into()),
+            url::Host::Domain(format!(".{IDS_HOST}.")),
+            #[cfg(not(feature = "fips"))]
             url::Host::Domain(".install.detsys.dev.".into()),
         ]),
     )
