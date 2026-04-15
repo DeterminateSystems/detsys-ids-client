@@ -55,7 +55,7 @@
 
         in
         {
-          default = pkgs.mkShell {
+          default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
             name = "detsys-ids-client-shell";
 
             RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
