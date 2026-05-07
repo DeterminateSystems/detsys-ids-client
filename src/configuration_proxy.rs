@@ -256,10 +256,8 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
 
         tracing::trace!(changed, diff, "Checked in");
 
-        if changed {
-            if let Some(fresh) = fresh_checkin {
-                current_checkin.replace(fresh);
-            }
+        if changed && let Some(fresh) = fresh_checkin {
+            current_checkin.replace(fresh);
         }
 
         let current_checkin = current_checkin.downgrade().clone();
@@ -273,10 +271,8 @@ impl<T: crate::transport::Transport> ConfigurationProxy<T> {
             .send((current_checkin.clone(), feature_facts))
             .map_err(|e| ConfigurationProxyError::Reply(format!("{e:?}")))?;
 
-        if changed {
-            if let Err(e) = self.change_notifier.send(()) {
-                tracing::debug!(%e, "Error notifying subscribers to changed feature configuration");
-            }
+        if changed && let Err(e) = self.change_notifier.send(()) {
+            tracing::debug!(%e, "Error notifying subscribers to changed feature configuration");
         }
 
         Ok(())
