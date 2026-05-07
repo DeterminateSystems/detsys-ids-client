@@ -2,10 +2,10 @@
   description = "detsys-ids-client";
 
   inputs = {
-    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1.590113.tar.gz";
+    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0";
 
     fenix = {
-      url = "https://flakehub.com/f/nix-community/fenix/0.1.1584.tar.gz";
+      url = "https://flakehub.com/f/nix-community/fenix/0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
