@@ -41,10 +41,12 @@ impl SrvHttpTransport {
         let resolver = hickory_resolver::TokioResolver::builder_tokio().unwrap_or_else(|e| {
             tracing::debug!(%e, "Failed to load resolv.conf settings, falling back to Google DNS.");
             hickory_resolver::Resolver::builder_with_config(
-                hickory_resolver::config::ResolverConfig::google(),
-                hickory_resolver::name_server::TokioConnectionProvider::default(),
+                hickory_resolver::config::ResolverConfig::udp_and_tcp(
+                    &hickory_resolver::config::GOOGLE,
+                ),
+                hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
             )
-        }).build();
+        }).build()?;
 
         let srv =
             SrvClient::<Resolver>::new_with_resolver(&record, fallback, allowed_suffixes, resolver);
@@ -188,6 +190,9 @@ async fn perform_request(
 pub enum SrvHttpTransportError {
     #[error(transparent)]
     SrvError(#[from] detsys_srv::Error<<Resolver as detsys_srv::resolver::SrvResolver>::Error>),
+
+    #[error(transparent)]
+    Resolver(#[from] hickory_resolver::net::NetError),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),

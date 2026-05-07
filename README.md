@@ -29,7 +29,7 @@ Components:
 - **Recorder** is the user-interface and cheap to clone, doing all the work over channels.
 - **Storage** models persistent storage between executions, which may be a no-op in-memory implementation.
 - **ConfigurationProxy** reads configuration and feature properties from the **Transport**.
-- **Collator** fetches a recent **SystemSnapshot** from the **SystemSnapshotter** and agggregates the total sum of facts and event data to enrich the basic event data from the **Recorder**. Those events are then sent to the **Submitter**.
+- **Collator** fetches a recent **SystemSnapshot** from the **SystemSnapshotter** and aggregates the total sum of facts and event data to enrich the basic event data from the **Recorder**. Those events are then sent to the **Submitter**.
 - **SystemSnapshotter** produces a fresh **SystemSnapshot** of the host. This may include properties that change frequently, like thermal state, so a SystemSnapshot must not be reused.
 - **Submitter** batches and sends events over the **Transport** on a schedule, or when the **Recorder** explicitly requests an immediate flush.
 - **Transport** handles the actual reading of configuration and writing of event data.
