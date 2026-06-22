@@ -19,12 +19,18 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/flakehub-cache-action@main
       - name: Check Nixpkgs input
         uses: DeterminateSystems/flake-checker-action@main
+
+      - name: Lint GitHub Actions
+        if: always()
+        run: nix develop --command zizmor .github
 
       - name: Check EditorConfig conformance
         if: always()
@@ -34,9 +40,9 @@ jobs:
         if: always()
         run: nix develop --command check-spelling
 
-      - name: Check nixpkgs-fmt formatting
+      - name: Check Nix formatting
         if: always()
-        run: nix develop --command check-nixpkgs-fmt
+        run: nix develop --command check-nix-fmt
 
       - name: Check rustfmt
         if: always()

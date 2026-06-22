@@ -1,18 +1,25 @@
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
+    cooldown:
+      default-days: 7
     groups:
-      actions-deps:
-        patterns:
-          - "*"
+      actions:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: DeterminateSystems/*
+    commit-message:
+      prefix: ci
 
-  - package-ecosystem: "cargo"
-    directory: "/"
+  - package-ecosystem: cargo
+    directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       cargo-deps:
         patterns:
