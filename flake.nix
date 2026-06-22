@@ -82,6 +82,7 @@
               cargo-watch
               cargo-nextest
               cargo-machete
+              zizmor
               self.formatter.${system}
               check.check-rustfmt
               check.check-spelling
