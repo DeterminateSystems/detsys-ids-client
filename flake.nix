@@ -16,39 +16,53 @@
   };
 
   outputs =
-    { self
-    , nixpkgs
-    , fenix
-    , naersk
-    , ...
-    } @ inputs:
+    {
+      self,
+      nixpkgs,
+      fenix,
+      naersk,
+      ...
+    }@inputs:
     let
-      supportedSystems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+      supportedSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
 
       forAllSystems = f: nixpkgs.lib.genAttrs supportedSystems (system: (forSystem system f));
 
-      forSystem = system: f: f rec {
-        inherit system;
-        pkgs = nixpkgs.legacyPackages.${system};
-        lib = pkgs.lib;
-      };
+      forSystem =
+        system: f:
+        f rec {
+          inherit system;
+          pkgs = nixpkgs.legacyPackages.${system};
+          lib = pkgs.lib;
+        };
 
-      fenixToolchain = system: with fenix.packages.${system};
-        combine ([
-          stable.clippy
-          stable.rustc
-          stable.cargo
-          stable.rustfmt
-          stable.rust-src
-          stable.rust-analyzer
-        ] ++ nixpkgs.lib.optionals (system == "x86_64-linux") [
-          targets.x86_64-unknown-linux-musl.stable.rust-std
-        ] ++ nixpkgs.lib.optionals (system == "aarch64-linux") [
-          targets.aarch64-unknown-linux-musl.stable.rust-std
-        ]);
+      fenixToolchain =
+        system:
+        with fenix.packages.${system};
+        combine (
+          [
+            stable.clippy
+            stable.rustc
+            stable.cargo
+            stable.rustfmt
+            stable.rust-src
+            stable.rust-analyzer
+          ]
+          ++ nixpkgs.lib.optionals (system == "x86_64-linux") [
+            targets.x86_64-unknown-linux-musl.stable.rust-std
+          ]
+          ++ nixpkgs.lib.optionals (system == "aarch64-linux") [
+            targets.aarch64-unknown-linux-musl.stable.rust-std
+          ]
+        );
     in
     {
-      devShells = forAllSystems ({ system, pkgs, ... }:
+      devShells = forAllSystems (
+        { system, pkgs, ... }:
         let
           toolchain = fenixToolchain system;
           check = import ./nix/check.nix { inherit pkgs toolchain; };
@@ -58,10 +72,9 @@
           default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
             name = "detsys-ids-client-shell";
 
-            RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+            env.RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
 
-            nativeBuildInputs = with pkgs; [ ];
-            buildInputs = with pkgs; [
+            packages = with pkgs; [
               toolchain
               cargo-outdated
               cacert
@@ -69,18 +82,22 @@
               cargo-watch
               cargo-nextest
               cargo-machete
-              nixpkgs-fmt
+              self.formatter.${system}
               check.check-rustfmt
               check.check-spelling
-              check.check-nixpkgs-fmt
+              check.check-nix-fmt
               check.check-editorconfig
               check.check-clippy
               libiconv
             ];
           };
-        });
+        }
+      );
 
-      checks = forAllSystems ({ system, pkgs, ... }:
+      formatter = forAllSystems ({ pkgs, ... }: pkgs.nixfmt-tree);
+
+      checks = forAllSystems (
+        { system, pkgs, ... }:
         let
           toolchain = fenixToolchain system;
           check = import ./nix/check.nix { inherit pkgs toolchain; };
@@ -96,16 +113,25 @@
             check-spelling
             touch $out
           '';
-          check-nixpkgs-fmt = pkgs.runCommand "check-nixpkgs-fmt" { buildInputs = [ check.check-nixpkgs-fmt ]; } ''
+          check-nix-fmt = pkgs.runCommand "check-nix-fmt" { buildInputs = [ check.check-nix-fmt ]; } ''
             cd ${./.}
-            check-nixpkgs-fmt
+            check-nix-fmt
             touch $out
           '';
-          check-editorconfig = pkgs.runCommand "check-editorconfig" { buildInputs = [ pkgs.git check.check-editorconfig ]; } ''
-            cd ${./.}
-            check-editorconfig
-            touch $out
-          '';
-        });
+          check-editorconfig =
+            pkgs.runCommand "check-editorconfig"
+              {
+                buildInputs = [
+                  pkgs.git
+                  check.check-editorconfig
+                ];
+              }
+              ''
+                cd ${./.}
+                check-editorconfig
+                touch $out
+              '';
+        }
+      );
     };
 }
