@@ -3,7 +3,7 @@ use tokio::sync::mpsc::Receiver;
 use crate::collator::{CollatedSignal, Event};
 
 #[derive(Debug, serde::Serialize)]
-pub(crate) struct Batch<'a> {
+pub struct Batch<'a> {
     sent_at: String,
     batch: &'a [Event],
 }

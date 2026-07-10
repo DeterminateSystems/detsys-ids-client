@@ -6,7 +6,7 @@ use crate::{Map, submitter::Batch};
 use super::Transport;
 
 #[derive(Clone)]
-pub(crate) struct ReqwestTransport {
+pub struct ReqwestTransport {
     host: Url,
     timeout: std::time::Duration,
     client: reqwest::Client,
@@ -41,7 +41,7 @@ impl Transport for ReqwestTransport {
     type Error = ReqwestTransportError;
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
-    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
+    async fn submit(&self, batch: Batch<'_>) -> Result<(), Self::Error> {
         let mut url = self.host.clone();
         url.set_path("/events/batch");
 

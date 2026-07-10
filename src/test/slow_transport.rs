@@ -42,7 +42,7 @@ impl Transport for SlowTransport {
             .ok_or(Error::Simulated)
     }
 
-    async fn submit(&mut self, _batch: crate::submitter::Batch<'_>) -> Result<(), Self::Error> {
+    async fn submit(&self, _batch: crate::submitter::Batch<'_>) -> Result<(), Self::Error> {
         tokio::time::sleep(self.duration).await;
         Err(Error::Simulated)
     }

@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::identity::AnonymousDistinctId;
 use crate::storage::Storage;
-use crate::transport::{Transport, TransportsError};
+use crate::transport::{Transport, Transports, TransportsError};
 use crate::{DeviceId, DistinctId, Map, system_snapshot::SystemSnapshotter};
 use crate::{Groups, Recorder, Worker};
 
@@ -183,7 +183,7 @@ impl Builder {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn try_build(mut self) -> Result<(Recorder, Worker), TransportsError> {
+    pub async fn try_build(mut self) -> Result<(Recorder<Transports>, Worker), TransportsError> {
         let transport = self.transport().await?;
 
         Ok(self
@@ -196,7 +196,7 @@ impl Builder {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn build_or_default(mut self) -> (Recorder, Worker) {
+    pub async fn build_or_default(mut self) -> (Recorder<Transports>, Worker) {
         let transport = self.transport_or_default().await;
 
         self.build_with(
@@ -212,7 +212,7 @@ impl Builder {
         mut self,
         snapshotter: S,
         storage: P,
-    ) -> Result<(Recorder, Worker), TransportsError> {
+    ) -> Result<(Recorder<Transports>, Worker), TransportsError> {
         let transport = self.transport().await?;
 
         Ok(self.build_with(transport, snapshotter, storage).await)
@@ -223,7 +223,7 @@ impl Builder {
         mut self,
         snapshotter: S,
         storage: P,
-    ) -> (Recorder, Worker) {
+    ) -> (Recorder<Transports>, Worker) {
         let transport = self.transport_or_default().await;
 
         self.build_with(transport, snapshotter, storage).await
@@ -235,7 +235,7 @@ impl Builder {
         transport: T,
         snapshotter: S,
         storage: P,
-    ) -> (Recorder, Worker) {
+    ) -> (Recorder<T>, Worker) {
         Worker::new(
             self.anonymous_distinct_id.take(),
             self.distinct_id.take(),

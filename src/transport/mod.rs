@@ -1,5 +1,6 @@
-use std::{future::Future, time::Duration};
+use std::{future::Future, sync::Arc, time::Duration};
 
+use arc_swap::ArcSwap;
 use file::FileTransport;
 use http::ReqwestTransport;
 use reqwest::Certificate;
@@ -18,7 +19,7 @@ const IDS_HOST: &str = "install.determinate.systems";
 const IDS_HOST: &str = "install.determinate.us";
 pub(crate) const APPLICATION_JSON: &str = "application/json";
 
-pub(crate) trait Transport: Send + Sync + Clone + 'static {
+pub trait Transport: Send + Sync + Clone + 'static {
     type Error: std::error::Error;
 
     fn checkin(
@@ -26,7 +27,7 @@ pub(crate) trait Transport: Send + Sync + Clone + 'static {
         session_properties: Map,
     ) -> impl Future<Output = Result<crate::checkin::Checkin, Self::Error>> + Send;
 
-    fn submit(&mut self, batch: Batch<'_>) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn submit(&self, batch: Batch<'_>) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 pub(crate) fn default_transport_backend() -> (String, Url, Option<Vec<url::Host>>) {
@@ -42,7 +43,12 @@ pub(crate) fn default_transport_backend() -> (String, Url, Option<Vec<url::Host>
 }
 
 #[derive(Clone)]
-pub(crate) enum Transports {
+pub struct Transports {
+    pub transport_kind: Arc<ArcSwap<TransportKind>>,
+}
+
+#[derive(Clone)]
+pub enum TransportKind {
     None,
     File(FileTransport),
     Http(ReqwestTransport),
@@ -51,53 +57,64 @@ pub(crate) enum Transports {
 
 impl Transports {
     pub(crate) fn none() -> Self {
-        Transports::None
+        Self {
+            transport_kind: Arc::new(ArcSwap::from_pointee(TransportKind::None)),
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(err(level = tracing::Level::TRACE)))]
     pub(crate) async fn try_new(
-        opt_value: Option<String>,
+        transport_url: Option<String>,
         timeout: Duration,
         certificates: Option<Certificate>,
         proxy: Option<Url>,
     ) -> Result<Self, TransportsError> {
-        let Some(value) = opt_value else {
-            let (record, fallback, allowed_suffixes) = default_transport_backend();
+        let transport_kind = match transport_url {
+            Some(transport_url) => {
+                let url = Url::parse(&transport_url).or_else(|e| {
+                    if e == url::ParseError::RelativeUrlWithoutBase {
+                        tracing::debug!("Re-parsing the URL with a file:// prefix");
+                        Url::parse(&format!("file://{transport_url}"))
+                    } else {
+                        Err(e)
+                    }
+                })?;
 
-            return Ok(Self::SrvHttp(SrvHttpTransport::new(
-                record,
-                fallback,
-                allowed_suffixes,
-                timeout,
-                certificates,
-                proxy,
-            )?));
-        };
-        let url = Url::parse(&value).or_else(|e| {
-            if e == url::ParseError::RelativeUrlWithoutBase {
-                tracing::debug!("Re-parsing the URL with a file:// prefix");
-                Url::parse(&format!("file://{value}"))
-            } else {
-                Err(e)
+                match url.scheme() {
+                    "https" | "http" => TransportKind::Http(http::ReqwestTransport::new(
+                        url,
+                        timeout,
+                        certificates,
+                        proxy,
+                    )?),
+                    "file" => TransportKind::File(
+                        FileTransport::new(
+                            url.path(),
+                            std::env::var_os("DETSYS_IDS_CHECKIN_FILE")
+                                .map(std::path::PathBuf::from),
+                        )
+                        .await?,
+                    ),
+                    _ => return Err(TransportsError::UnknownUrlScheme),
+                }
             }
-        })?;
+            None => {
+                let (record, fallback, allowed_suffixes) = default_transport_backend();
 
-        match url.scheme() {
-            "https" | "http" => Ok(Transports::Http(http::ReqwestTransport::new(
-                url,
-                timeout,
-                certificates,
-                proxy,
-            )?)),
-            "file" => Ok(Transports::File(
-                FileTransport::new(
-                    url.path(),
-                    std::env::var_os("DETSYS_IDS_CHECKIN_FILE").map(std::path::PathBuf::from),
-                )
-                .await?,
-            )),
-            _ => Err(TransportsError::UnknownUrlScheme),
-        }
+                TransportKind::SrvHttp(SrvHttpTransport::new(
+                    record,
+                    fallback,
+                    allowed_suffixes,
+                    timeout,
+                    certificates,
+                    proxy,
+                )?)
+            }
+        };
+
+        Ok(Self {
+            transport_kind: Arc::new(ArcSwap::from_pointee(transport_kind)),
+        })
     }
 }
 
@@ -109,24 +126,23 @@ impl Transport for Transports {
         &self,
         session_properties: Map,
     ) -> Result<crate::checkin::Checkin, Self::Error> {
-        match self {
-            Self::None => Ok(crate::checkin::Checkin {
-                options: std::collections::HashMap::new(),
+        match self.transport_kind.load().as_ref() {
+            TransportKind::None => Ok(crate::checkin::Checkin {
                 ..Default::default()
             }),
-            Self::File(t) => Ok(t.checkin(session_properties).await?),
-            Self::Http(t) => Ok(t.checkin(session_properties).await?),
-            Self::SrvHttp(t) => Ok(t.checkin(session_properties).await?),
+            TransportKind::File(t) => Ok(t.checkin(session_properties).await?),
+            TransportKind::Http(t) => Ok(t.checkin(session_properties).await?),
+            TransportKind::SrvHttp(t) => Ok(t.checkin(session_properties).await?),
         }
     }
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
-    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
-        match self {
-            Self::None => Ok(()),
-            Self::File(t) => Ok(t.submit(batch).await?),
-            Self::Http(t) => Ok(t.submit(batch).await?),
-            Self::SrvHttp(t) => Ok(t.submit(batch).await?),
+    async fn submit(&self, batch: Batch<'_>) -> Result<(), Self::Error> {
+        match self.transport_kind.load().as_ref() {
+            TransportKind::None => Ok(()),
+            TransportKind::File(t) => Ok(t.submit(batch).await?),
+            TransportKind::Http(t) => Ok(t.submit(batch).await?),
+            TransportKind::SrvHttp(t) => Ok(t.submit(batch).await?),
         }
     }
 }

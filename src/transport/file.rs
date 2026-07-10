@@ -11,7 +11,7 @@ use crate::submitter::Batch;
 use super::Transport;
 
 #[derive(Clone)]
-pub(crate) struct FileTransport {
+pub struct FileTransport {
     checkin: Option<(PathBuf, Arc<Mutex<File>>)>,
 
     output_path: PathBuf,
@@ -54,7 +54,7 @@ impl Transport for FileTransport {
     type Error = FileTransportError;
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all))]
-    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
+    async fn submit(&self, batch: Batch<'_>) -> Result<(), Self::Error> {
         let mut handle = self.output_handle.lock().await;
 
         handle

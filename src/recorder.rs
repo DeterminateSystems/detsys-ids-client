@@ -6,6 +6,7 @@ use crate::checkin::{Checkin, Feature};
 use crate::collator::FeatureFacts;
 use crate::configuration_proxy::{CheckinStatus, ConfigurationProxySignal};
 use crate::identity::DistinctId;
+use crate::transport::Transport;
 use crate::{Map, PersonProperties};
 
 #[derive(Debug)]
@@ -82,15 +83,17 @@ pub enum RecorderError {
     Response(#[from] tokio::sync::oneshot::error::RecvError),
 }
 
-pub struct Recorder {
+pub struct Recorder<T: Transport> {
+    pub transport: T,
     outgoing: Sender<RawSignal>,
     auto_refresh_config: bool,
     to_configuration_proxy: Sender<ConfigurationProxySignal>,
 }
 
-impl Clone for Recorder {
+impl<T: Transport> Clone for Recorder<T> {
     fn clone(&self) -> Self {
         Self {
+            transport: self.transport.clone(),
             outgoing: self.outgoing.clone(),
             auto_refresh_config: true,
             to_configuration_proxy: self.to_configuration_proxy.clone(),
@@ -98,19 +101,21 @@ impl Clone for Recorder {
     }
 }
 
-impl std::fmt::Debug for Recorder {
+impl<T: Transport> std::fmt::Debug for Recorder<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Recorder").finish()
     }
 }
 
-impl Recorder {
+impl<Tr: Transport> Recorder<Tr> {
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all))]
     pub(crate) fn new(
+        transport: Tr,
         snapshotter_tx: Sender<RawSignal>,
         to_configuration_proxy: Sender<ConfigurationProxySignal>,
     ) -> Self {
         Self {
+            transport,
             outgoing: snapshotter_tx,
             to_configuration_proxy,
             auto_refresh_config: true,
@@ -121,7 +126,7 @@ impl Recorder {
     // Note: there are no atomic semantics, and configuration is refreshed at the end no matter what your function does.
     pub async fn in_configuration_txn<F, T>(&self, f: F) -> T
     where
-        F: AsyncFnOnce(&Recorder) -> T,
+        F: AsyncFnOnce(&Recorder<Tr>) -> T,
     {
         let mut rec = self.clone();
 

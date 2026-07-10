@@ -42,7 +42,7 @@ impl Worker {
         system_snapshotter: F,
         storage: P,
         transport: T,
-    ) -> (Recorder, Worker) {
+    ) -> (Recorder<T>, Worker) {
         // Message flow:
         //
         // Recorder --> Configuration --\
@@ -52,7 +52,11 @@ impl Worker {
         let (to_collator, collator_rx) = channel(1000);
         let (to_submitter, submitter_rx) = channel(1000);
 
-        let recorder = Recorder::new(to_collator.clone(), to_configuration_proxy);
+        let recorder = Recorder::new(
+            transport.clone(),
+            to_collator.clone(),
+            to_configuration_proxy,
+        );
         let mut configuration =
             ConfigurationProxy::new(transport.clone(), configuration_proxy_rx, to_collator);
         let collator = Collator::new(

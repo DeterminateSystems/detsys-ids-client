@@ -20,7 +20,7 @@ type Resolver = hickory_resolver::TokioResolver;
 // >;
 
 #[derive(Clone)]
-pub(crate) struct SrvHttpTransport {
+pub struct SrvHttpTransport {
     srv: Arc<SrvClient<Resolver>>,
     server_options: Arc<tokio::sync::RwLock<crate::checkin::ServerOptions>>,
     reqwest: reqwest::Client,
@@ -75,7 +75,7 @@ impl Transport for SrvHttpTransport {
     type Error = SrvHttpTransportError;
 
     #[cfg_attr(feature = "tracing-instrument", tracing::instrument(skip_all, ret(level = tracing::Level::TRACE)))]
-    async fn submit(&mut self, batch: Batch<'_>) -> Result<(), Self::Error> {
+    async fn submit(&self, batch: Batch<'_>) -> Result<(), Self::Error> {
         let payload = serde_json::to_string(&batch)?;
         let reqwest = self.reqwest.clone();
         let server_opts = self.server_options.clone();
